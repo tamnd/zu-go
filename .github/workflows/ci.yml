@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Formatting is the one check that needs neither the engine nor a C
+  # compiler, so it answers in seconds rather than after a Rust build.
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+      - run: gofmt -l . | tee /tmp/unformatted
+      - name: Every file is formatted
+        run: test ! -s /tmp/unformatted
+
+  # The client is cgo over libzu, so there is nothing to vet and nothing
+  # to test without the library. Every job below builds it from the
+  # engine at the revision this client is written against, which is what
+  # makes a red job here mean the client is wrong rather than that
+  # somebody's machine had an old copy installed.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go: ["1.25", "1.26"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/checkout@v5
+        with:
+          repository: tamnd/zu
+          path: engine
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+
+      - name: Build libzu
+        working-directory: engine
+        run: |
+          set -eu
+          # The CLI as well as the library, because the staging step
+          # packages both and stops on the one it cannot find.
+          cargo build --release -p zu-capi -p zu-cli
+          target="$(rustc -vV | sed -n 's/^host: //p')"
+          # What a static link needs beside the archive, asked of rustc
+          # rather than written down here: the answer differs per target
+          # and changes with the toolchain, and a Libs.private that is a
+          # guess is a pkg-config --static line that does not link.
+          syslibs="$(cargo rustc -q --color never --release -p zu-capi \
+              --crate-type staticlib -- --print native-static-libs 2>&1 |
+              sed -n 's/^note: native-static-libs: //p' | tail -1)"
+          test -n "$syslibs"
+          cargo run -q -p xtask -- package \
+              --stage "$GITHUB_WORKSPACE/dist/libzu" \
+              --built target/release --target "$target" --syslibs "$syslibs"
+          echo "PKG_CONFIG_PATH=$GITHUB_WORKSPACE/dist/libzu/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      # The ABI revision the header declares is checked by the test
+      # suite itself rather than by a step here, so that it fails the
+      # same way on a laptop.
+      - run: go vet ./...
+
+      - run: go test -count=1 ./...
+
+      # The concurrency rules here are the whole reason the connection
+      # holds a lock, and the interrupt is a second goroutine reaching
+      # into a connection another one is inside of. Neither is worth
+      # anything unchecked.
+      - run: go test -race -count=1 ./...
+
+      # Not for the numbers, which mean nothing on a shared runner, but
+      # because a benchmark is code that only this runs.
+      - run: go test -run '^$' -bench . -benchtime 10x ./...

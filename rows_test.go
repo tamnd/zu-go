@@ -440,3 +440,63 @@ func TestBreakingOutOfTheRangeLoopStopsIt(t *testing.T) {
 		t.Errorf("a loop that broke after one row saw %d", seen)
 	}
 }
+
+func TestARowIsReachableByItsIndexWithoutMovingTheCursor(t *testing.T) {
+	conn := memory(t)
+	rows := query(t, conn, "UNWIND [10, 20, 30] AS n RETURN n")
+
+	// Out of order, twice each, and before Next has been called at all.
+	// The result is an array and not a cursor, so none of that is a
+	// trick being played on it.
+	for _, tc := range []struct {
+		at   int64
+		want int64
+	}{{2, 30}, {0, 10}, {2, 30}, {1, 20}} {
+		var got int64
+		if err := rows.RowAt(tc.at).Scan(&got); err != nil {
+			t.Fatalf("reading row %d: %v", tc.at, err)
+		}
+		if got != tc.want {
+			t.Errorf("row %d holds %d and the statement wrote %d", tc.at, got, tc.want)
+		}
+	}
+
+	if got, err := rows.RowAt(1).Type(0); err != nil || got != TypeInt {
+		t.Errorf("the type of row 1 is %v, %v", got, err)
+	}
+	if got, err := rows.RowAt(0).Value(0); err != nil || got != int64(10) {
+		t.Errorf("the value of row 0 is %#v, %v", got, err)
+	}
+
+	// None of that moved where the loop is, so the loop still sees all
+	// three from the start.
+	seen := 0
+	for range rows.All() {
+		seen++
+	}
+	if seen != 3 {
+		t.Errorf("the loop saw %d rows after the result was read by index", seen)
+	}
+}
+
+func TestARowIndexThatIsNotARowIsRefused(t *testing.T) {
+	conn := memory(t)
+	rows := query(t, conn, "UNWIND [1, 2, 3] AS n RETURN n")
+
+	for _, at := range []int64{-1, 3, 1 << 40} {
+		var got int64
+		err := rows.RowAt(at).Scan(&got)
+		if !errors.Is(err, Misuse) {
+			t.Errorf("row %d is refused with %v", at, err)
+		}
+		if _, err := rows.RowAt(at).Type(0); !errors.Is(err, Misuse) {
+			t.Errorf("the type of row %d is refused with %v", at, err)
+		}
+		if _, err := rows.RowAt(at).Value(0); !errors.Is(err, Misuse) {
+			t.Errorf("the value of row %d is refused with %v", at, err)
+		}
+	}
+	if err := rows.Err(); !errors.Is(err, Misuse) {
+		t.Errorf("the result did not record the refusal: %v", err)
+	}
+}

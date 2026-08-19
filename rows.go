@@ -82,6 +82,19 @@ func (r *Rows) Row() Row {
 	return Row{rows: r, i: r.i}
 }
 
+// RowAt is the row at an index, counted from zero. The result is an
+// array and not a cursor, so a program that reads it out of order or
+// looks at one row twice is doing something the shape allows rather
+// than something it is getting away with, and this does not move where
+// [Rows.Next] is.
+//
+// An index that is not a row of this result is not refused here. It is
+// refused by the read, which is where the column is known and where the
+// message can say which one.
+func (r *Rows) RowAt(i int64) Row {
+	return Row{rows: r, i: i}
+}
+
 // All is the rows as a range-over-func sequence, which is the loop
 // most programs want:
 //
@@ -250,8 +263,8 @@ func (row Row) Values() ([]any, error) {
 // than scan and find out.
 func (row Row) Type(col int) (Type, error) {
 	r := row.rows
-	if r.h == nil {
-		return 0, r.note(misuse("the result is closed"))
+	if _, err := row.cell(col); err != nil {
+		return 0, r.note(err)
 	}
 	st := C.zu_result_cell_type(r.h, C.uint64_t(row.i), C.uint32_t(col), &r.sc.i32)
 	if err := fail(st, nil); err != nil {
@@ -270,6 +283,10 @@ func (row Row) cell(col int) (*C.zu_value, error) {
 	if col < 0 || col >= len(r.cols) {
 		return nil, misuse("column " + strconv.Itoa(col) + " of a result with " +
 			strconv.Itoa(len(r.cols)) + " columns")
+	}
+	if row.i < 0 || row.i >= r.n {
+		return nil, misuse("row " + strconv.FormatInt(row.i, 10) + " of a result with " +
+			strconv.FormatInt(r.n, 10) + " rows")
 	}
 	if err := fail(C.zu_result_cell(r.h, C.uint64_t(row.i), C.uint32_t(col), &r.sc.val), nil); err != nil {
 		return nil, err

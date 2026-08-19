@@ -54,18 +54,53 @@ go get github.com/tamnd/zu-go
 
 Longer than the other clients' first example, and correct by the standards of Go. A binding that hides errors to look short is a binding Go programmers will not trust.
 
+## Building
+
+This client is cgo over the engine's C ABI, so it needs `libzu` where pkg-config can find it. Until the static libraries are vendored, build the engine and point at what it staged.
+
+```
+git clone https://github.com/tamnd/zu
+cd zu
+cargo build --release -p zu-capi -p zu-cli
+cargo run -p xtask -- package --stage dist/libzu --built target/release \
+    --target "$(rustc -vV | sed -n 's/^host: //p')" --syslibs "$(cargo rustc -q --release \
+    -p zu-capi --crate-type staticlib -- --print native-static-libs 2>&1 |
+    sed -n 's/^note: native-static-libs: //p' | tail -1)"
+```
+
+```
+export PKG_CONFIG_PATH=/path/to/zu/dist/libzu/lib/pkgconfig
+go test ./...
+```
+
+The CLI is built beside the library because the staging step packages both, and the `--syslibs` line is asked of rustc rather than written down because the answer differs per target and changes with the toolchain.
+
 ## What you get
 
-- `context.Context` first on every call that can block, and cancelling it calls into the engine's interrupt rather than leaking a goroutine.
-- `errors.Is` and `errors.As` against `*zu.Error`, which carries `Code`, `Position`, `DocURL`, and `Retryable`.
-- Range-over-func iteration: `rows.All()` is an `iter.Seq[Row]`, and `zu.Iter[T]` streams into your own struct type.
-- Three scanning levels: `database/sql`-style `Scan`, generic struct scanning with tags, and a columnar view for the hot path.
-- A `database/sql` driver in the `zusql` subpackage, for shops standardized on it, with its limits stated plainly rather than papered over.
-- `zulint`, a shipped analyzer for the mistakes that actually happen: using a columnar view after `Close()`, forgetting `rows.Err()`, sharing a `*zu.Conn` across goroutines.
+- `context.Context` first on every call that can block. Cancelling it calls into the engine's interrupt, and the failure that comes back answers `errors.Is` against both `context.Canceled` and `zu.Interrupted`, because a caller who wrote the deadline and a caller handling the failure ask different questions of the same error. A context that can never be cancelled starts no goroutine.
+- `errors.Is` and `errors.As` against `*zu.Error`, which carries `Code`, `Message`, `StandardText`, `DocURL`, `Severity`, `Retryable`, `Position` and the source line the position points into. The statuses are sentinels of their own: `errors.Is(err, zu.Conflict)` is the retry question and needs no unwrapping.
+- Range-over-func iteration: `rows.All()` is an `iter.Seq[Row]`, and `zu.Iter[T]` is an `iter.Seq2[T, error]` that streams into your own type.
+- Three levels of reading, in the order you reach for them: `Scan` into concrete destinations, `Collect[T]` and `Iter[T]` into a struct matched by `zu` tags or by name, and `Int64s`, `Float64s`, `NodeOffsets` and `Valid` for a whole column borrowed from the result without a copy.
+- The seven temporal types spelled out rather than flattened into `time.Time`. A date is a `zu.Date`, a time of day is a `zu.LocalTime`, and a year-month duration is a `zu.YearMonth`, because a `time.Time` made out of a time of day is a date somebody invented. The three that name an instant scan into a `time.Time` when you ask for one.
+- Transactions with `Begin`, `BeginReadOnly`, `Commit` and `Rollback`, where a rollback deferred beside a commit answers `zu.ErrDone` rather than a failure.
 
-Static libraries are vendored per platform, so `go get` works with `CGO_ENABLED=1` and a C compiler and nothing else. Cross-compilation is documented per target triple with a `zig cc` recipe that actually works, because cross-compiling a cgo project is where Go users abandon a library. `CGO_ENABLED=0` is supported through a `purego` build tag over `dlopen`.
+Reading a column of integers a row at a time allocates nothing at all, and so does collecting a whole result into a slice of structs: the out-parameters every C accessor writes through are fields of the result rather than locals, and the destinations a struct scan writes into are taken once rather than at every row.
 
-Floor is `go 1.25`, the older of the two supported lines. CI runs 1.25 and 1.26.
+Floor is `go 1.25`, the older of the two supported lines. CI runs 1.25 and 1.26 on Linux and macOS, under the race detector.
+
+## Concurrency
+
+A `*zu.DB` is safe to share. A `*zu.Conn` is not, and neither is the `*zu.Rows` it produced. Two goroutines on one connection are refused rather than raced: the second one answers `zu.Concurrent` and nothing was done. A program that queries from several goroutines gives each one its own connection, which is `db.Connect` or `conn.Duplicate`.
+
+`Interrupt` is the exception and the point of it: it is meant to be called from another goroutine while a statement runs, and so is `RowsRead`, which is what a progress bar reads.
+
+A result owns its rows outright, so it stays readable after the connection that produced it has gone back to a pool. What it does not outlive is `Close`, and that includes every slice the columnar readers handed back.
+
+## Not here yet
+
+The pieces of this client that milestone DX4 lists and this first release does not have: the `zusql` `database/sql` subpackage, vendored static libraries per platform with the cross-compilation recipes, the `purego` build over `dlopen` for `CGO_ENABLED=0`, and the `zulint` analyzer for the mistakes that actually happen, which are a columnar view used after `Close`, a loop that never reads `rows.Err()`, and a `*zu.Conn` shared across goroutines.
+
+The engine itself has no way to name a node's table, so a `zu.Node` carries the numeric table id the ABI gives it.
 
 ## Specification
 

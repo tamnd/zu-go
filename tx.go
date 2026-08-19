@@ -1,0 +1,146 @@
+package zu
+
+/*
+#include <zu.h>
+*/
+import "C"
+
+import (
+	"context"
+	"sync/atomic"
+)
+
+// A Tx makes several statements one. Every statement outside a
+// transaction is already a transaction of its own, so this does not
+// turn transactions on: what it does is make what several statements
+// wrote either all kept or all unmade, and keep any of it invisible to
+// another connection until the commit publishes it.
+//
+// A transaction runs on the connection it was begun on, and the
+// statements that are in it are the ones run through that connection
+// while it is open. Query and Exec here are the connection's, spelled
+// through the transaction so that a reader of the code can see which
+// statements are inside it.
+type Tx struct {
+	conn *Conn
+	done atomic.Bool
+}
+
+// Begin starts a transaction. Beginning one inside another is refused
+// by the engine rather than nested.
+//
+// A commit that answers nil is durable: the log frame is on the disk
+// before the call returns.
+func (c *Conn) Begin(ctx context.Context) (*Tx, error) {
+	return c.begin(ctx, false)
+}
+
+// BeginReadOnly starts a transaction that may not write, which is
+// enforced rather than advisory: a write inside one fails at the
+// statement that wrote, not at the commit.
+func (c *Conn) BeginReadOnly(ctx context.Context) (*Tx, error) {
+	return c.begin(ctx, true)
+}
+
+func (c *Conn) begin(ctx context.Context, readOnly bool) (*Tx, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.h == nil {
+		return nil, misuse("the connection is closed")
+	}
+	flag := C.int32_t(0)
+	if readOnly {
+		flag = 1
+	}
+	var e *C.zu_error
+	if err := fail(C.zu_begin(c.h, flag, &e), e); err != nil {
+		return nil, err
+	}
+	c.tx.Store(true)
+	return &Tx{conn: c}, nil
+}
+
+// InTransaction reports whether this connection has a transaction
+// open. It is the one thing about a transaction that no statement
+// answers, and every cleanup path that has to know whether the body
+// already ended the transaction needs it.
+func (c *Conn) InTransaction() (bool, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.h == nil {
+		return false, misuse("the connection is closed")
+	}
+	var open C.int32_t
+	if err := fail(C.zu_conn_in_transaction(c.h, &open), nil); err != nil {
+		return false, err
+	}
+	return open != 0, nil
+}
+
+// Query runs a statement inside the transaction.
+func (t *Tx) Query(ctx context.Context, q string, args ...Arg) (*Rows, error) {
+	return t.conn.Query(ctx, q, args...)
+}
+
+// Exec runs a statement inside the transaction and throws its result
+// away.
+func (t *Tx) Exec(ctx context.Context, q string, args ...Arg) error {
+	return t.conn.Exec(ctx, q, args...)
+}
+
+// Prepare compiles a statement on the connection this transaction runs
+// on. The statement outlives the transaction, since it belongs to the
+// connection.
+func (t *Tx) Prepare(ctx context.Context, q string) (*Stmt, error) {
+	return t.conn.Prepare(ctx, q)
+}
+
+// Conn is the connection this transaction runs on, for a caller that
+// has a function taking one.
+func (t *Tx) Conn() *Conn {
+	return t.conn
+}
+
+// Commit keeps what the transaction wrote and publishes it. A commit
+// that answers nil is durable.
+func (t *Tx) Commit(ctx context.Context) error {
+	return t.end(ctx, true)
+}
+
+// Rollback unmakes what the transaction wrote. It answers [ErrDone]
+// when the transaction is already finished, which is what the usual
+//
+//	defer tx.Rollback(ctx)
+//
+// beside a commit does on the path where the commit worked. That path
+// is not a failure and ignoring the error there is correct.
+func (t *Tx) Rollback(ctx context.Context) error {
+	return t.end(ctx, false)
+}
+
+func (t *Tx) end(ctx context.Context, commit bool) error {
+	if !t.done.CompareAndSwap(false, true) {
+		return ErrDone
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c := t.conn
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.h == nil {
+		return misuse("the connection is closed")
+	}
+	var e *C.zu_error
+	var st C.zu_status
+	if commit {
+		st = C.zu_commit(c.h, &e)
+	} else {
+		st = C.zu_rollback(c.h, &e)
+	}
+	c.tx.Store(false)
+	return fail(st, e)
+}

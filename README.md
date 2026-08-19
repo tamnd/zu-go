@@ -86,7 +86,7 @@ The CLI is built beside the library because the staging step packages both, and 
 
 Reading a column of integers a row at a time allocates nothing at all, and so does collecting a whole result into a slice of structs: the out-parameters every C accessor writes through are fields of the result rather than locals, and the destinations a struct scan writes into are taken once rather than at every row.
 
-Floor is `go 1.25`, the older of the two supported lines. CI runs 1.25 and 1.26 on Linux and macOS, under the race detector.
+Floor is `go 1.26.6`. CI runs the floor and whatever is current on Linux and macOS, under the race detector.
 
 ## database/sql
 

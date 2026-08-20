@@ -155,7 +155,7 @@ func (c *Conn) Query(ctx context.Context, q string, args ...Arg) (*Rows, error) 
 	if err := caused(fail(st, e), w.end()); err != nil {
 		return nil, err
 	}
-	return newRows(h)
+	return newRows(c, h)
 }
 
 // queryArgs is Query with parameters, which is prepare, bind, execute

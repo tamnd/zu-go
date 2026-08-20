@@ -2,8 +2,10 @@ package viewafterclose
 
 import (
 	"context"
+	"unsafe"
 
 	zu "github.com/tamnd/zu-go"
+	"github.com/tamnd/zu-go/zuarrow"
 )
 
 func query(ctx context.Context, c *zu.Conn) *zu.Rows {
@@ -57,7 +59,44 @@ func handedOut(ctx context.Context, c *zu.Conn) []int64 {
 	rows := query(ctx, c)
 	defer rows.Close()
 	ids, _ := rows.Int64s(0)
-	return ids // want `ids borrows from rows, which this function closes, so the caller gets freed memory`
+	return ids // want `ids borrows from rows, which this function closes, so the caller gets memory it does not own`
+}
+
+// Handing the result to Arrow moves the buffers, so the borrow taken
+// before it points at memory the consumer owns now.
+func exportedThenRead(ctx context.Context, c *zu.Conn) int64 {
+	rows := query(ctx, c)
+	ids, _ := rows.Int64s(0)
+	var stream [8]byte
+	rows.ArrowStream(unsafe.Pointer(&stream), 0)
+
+	var sum int64
+	for _, id := range ids { // want `ids borrows from rows, and rows.ArrowStream has already handed it to an Arrow consumer`
+		sum += id
+	}
+	return sum
+}
+
+// The same thing spelled the way most programs spell it.
+func readAsArrowThenRead(ctx context.Context, c *zu.Conn) int64 {
+	rows := query(ctx, c)
+	ids, _ := rows.Int64s(0)
+	zuarrow.Reader(rows)
+
+	var sum int64
+	for _, id := range ids { // want `ids borrows from rows, and zuarrow.Reader has already handed it to an Arrow consumer`
+		sum += id
+	}
+	return sum
+}
+
+// And the batched spelling, with the borrow handed out to the caller
+// rather than read here, which is the same bug one frame further away.
+func exportedAndHandedOut(ctx context.Context, c *zu.Conn) []int64 {
+	rows := query(ctx, c)
+	ids, _ := rows.Int64s(0)
+	zuarrow.ReaderBatched(rows, 1000)
+	return ids // want `ids borrows from rows, and zuarrow.ReaderBatched has already handed it to an Arrow consumer`
 }
 
 // Read before the Close, which is the whole contract and is fine.

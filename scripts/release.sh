@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Release this repository, which is one client, the five library
-# modules it links against, and the analyzers, all in here.
+# modules it links against, the Arrow reader, and the analyzers, all
+# in here.
 #
 #     scripts/release.sh v0.11.0
 #
@@ -9,14 +10,17 @@
 # so lib/linux-amd64 is released as lib/linux-amd64/v0.11.0 and the
 # client is released as v0.11.0. The order matters and cannot be
 # batched: the client's go.mod has to name versions of the libraries
-# that already exist, so every library is tagged first, then the
-# requirements are rewritten, then that rewrite is reviewed and
-# merged, and only then is the client tagged.
+# that already exist, and zuarrow's go.mod has to name a version of
+# the client that already exists. So the libraries are tagged first,
+# then the client's requirements are rewritten and merged and the
+# client is tagged, then zuarrow's requirements are rewritten and
+# merged and zuarrow is tagged.
 #
-# That middle step is why this script is safe to run twice. Run it, it
-# tags the libraries and rewrites go.mod and stops. Open the pull
+# Those two middle steps are why this script is safe to run again. Run
+# it, it goes as far as it can and stops at a rewrite. Open the pull
 # request, get it merged, pull, run it again with the same version and
-# it goes the rest of the way.
+# it picks up where it stopped. Three runs release everything, and the
+# tags already pushed are skipped every time.
 
 set -euo pipefail
 
@@ -105,6 +109,35 @@ fi
 
 echo "go.mod already names $version"
 tag "$version"
+
+# zuarrow imports the client, so it is the one module that cannot be
+# released until the client is. Now it is, so the same dance runs once
+# more one directory down.
+echo "warming github.com/tamnd/zu-go@$version"
+GOFLAGS=-mod=mod GOWORK=off go list -m "github.com/tamnd/zu-go@$version" >/dev/null
+
+(
+    cd zuarrow
+    go mod edit -require "github.com/tamnd/zu-go@$version"
+    # One require line is written by hand and the rest follow from it:
+    # the five libraries are zuarrow's only because they are the
+    # client's, and tidy is what reads them back out. It is also what
+    # writes the sums, and zuarrow carries arrow-go and everything
+    # under it, so those are not sums to leave stale.
+    GOWORK=off go mod tidy
+)
+
+if [ -n "$(git status --porcelain zuarrow/go.mod zuarrow/go.sum)" ]; then
+    echo
+    echo "zuarrow/go.mod now names $version. Commit it, open a pull request,"
+    echo "get it merged, pull, and run this again with the same version. It"
+    echo "will skip everything above and tag zuarrow."
+    git --no-pager diff -- zuarrow/go.mod
+    exit 0
+fi
+
+echo "zuarrow/go.mod already names $version"
+tag "zuarrow/$version"
 
 echo
 echo "released $version"

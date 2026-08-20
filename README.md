@@ -152,10 +152,49 @@ Cross-compiling **to** darwin from anything that is not darwin is the one direct
 - Three levels of reading, in the order you reach for them: `Scan` into concrete destinations, `Collect[T]` and `Iter[T]` into a struct matched by `zu` tags or by name, and `Int64s`, `Float64s`, `NodeOffsets` and `Valid` for a whole column borrowed from the result without a copy.
 - The seven temporal types spelled out rather than flattened into `time.Time`. A date is a `zu.Date`, a time of day is a `zu.LocalTime`, and a year-month duration is a `zu.YearMonth`, because a `time.Time` made out of a time of day is a date somebody invented. The three that name an instant scan into a `time.Time` when you ask for one.
 - Transactions with `Begin`, `BeginReadOnly`, `Commit` and `Rollback`, where a rollback deferred beside a commit answers `zu.ErrDone` rather than a failure.
+- A whole result as Arrow record batches for the price of a pointer a column, through `zuarrow`, which is the section below.
 
 Reading a column of integers a row at a time allocates nothing at all, and so does collecting a whole result into a slice of structs: the out-parameters every C accessor writes through are fields of the result rather than locals, and the destinations a struct scan writes into are taken once rather than at every row.
 
 Floor is `go 1.26.6`. CI runs the floor and whatever is current on Linux and macOS, under the race detector.
+
+## Arrow
+
+A result leaves the engine as Arrow without being copied on the way. `zuarrow` is a module of its own so that the client keeps its zero dependencies, and it is thirty lines over `arrow-go`, because the work happens on the other side of the C Data Interface.
+
+```go
+import "github.com/tamnd/zu-go/zuarrow"
+
+rdr, err := zuarrow.Query(ctx, conn, "MATCH (p:person) RETURN p.id AS id")
+if err != nil {
+	return err
+}
+defer rdr.Release()
+
+for rdr.Next() {
+	ids := rdr.RecordBatch().Column(0).(*array.Int64)
+	for i := 0; i < ids.Len(); i++ {
+		sum += ids.Value(i)
+	}
+}
+return rdr.Err()
+```
+
+`zuarrow.Reader` takes a `*zu.Rows` you already have, `ReaderBatched` takes the rows per batch, and `Query` is the two of them in one call. All three hand back an `array.RecordReader`, which is what every Arrow consumer in Go already takes.
+
+Ten thousand integers, on an M4:
+
+| | |
+|---|---|
+| `zuarrow.Reader`, read through arrow-go | 25 µs, 44 allocs |
+| `Rows.Int64s`, the borrowed column | 262 µs |
+| the export itself, `Rows.ArrowStream` | 10.6 µs, 2 allocs |
+
+The export is one microsecond per thousand rows because nothing is per row: the executor's own column buffers are moved into the Arrow arrays and the stream is handed the result. What the borrowed column costs on top of that is the row build the C accessors still go through, which is a thing to fix in the engine rather than here.
+
+Two consequences of moving rather than copying, and both are the price of the number above. Exporting spends the result: the `*zu.Rows` is empty afterwards, every slice a columnar reader handed out before it now belongs to the Arrow consumer, and [`zulint`](zulint) reports a read of one. And a result the engine had to build across rows, which is anything with an `ORDER BY`, has no buffers to move and falls back to a cell at a time, which is fifty times slower and still correct.
+
+`Rows.ArrowStream` is the layer under all of this, for a program that already has an `ArrowArrayStream` to fill and its own idea of what to do with it. It takes the address of one as an `unsafe.Pointer` and fills it in place, and the consumer's release callback is what frees the result.
 
 ## database/sql
 
@@ -196,7 +235,7 @@ A `*zu.DB` is safe to share. A `*zu.Conn` is not, and neither is the `*zu.Rows` 
 
 `Interrupt` is the exception and the point of it: it is meant to be called from another goroutine while a statement runs, and so is `RowsRead`, which is what a progress bar reads.
 
-A result owns its rows outright, so it stays readable after the connection that produced it has gone back to a pool. What it does not outlive is `Close`, and that includes every slice the columnar readers handed back.
+A result owns its rows outright, so it stays readable after the connection that produced it has gone back to a pool. What it does not outlive is `Close`, and that includes every slice the columnar readers handed back. Exporting to Arrow ends the same lifetime for the same reason, since it moves those buffers to the consumer instead of freeing them.
 
 ## Static checks
 
@@ -207,7 +246,7 @@ go install github.com/tamnd/zu-go/zulint/cmd/zulint@latest
 zulint ./...
 ```
 
-It reports a columnar view used after the result it borrows from was closed, a loop over a result that never reads `rows.Err()`, and a `*zu.Conn` that two goroutines can reach. All three compile, pass review, and are a use-after-free, a swallowed failure and a refused query at run time. It reads source: no engine, no C toolchain, no database. This client runs it on itself in CI, and the one test that provokes the third on purpose says so with a `//zulint:ignore` comment.
+It reports a columnar view used after the result it borrows from was closed or handed to Arrow, a loop over a result that never reads `rows.Err()`, and a `*zu.Conn` that two goroutines can reach. All three compile, pass review, and are a use-after-free, a swallowed failure and a refused query at run time. It reads source: no engine, no C toolchain, no database. This client runs it on itself in CI, and the one test that provokes the third on purpose says so with a `//zulint:ignore` comment.
 
 ## Not here yet
 
@@ -239,13 +278,14 @@ Inside this repository:
 |---|---|
 | The client | the root package, `github.com/tamnd/zu-go` |
 | The `database/sql` driver | `zusql` |
+| The Arrow reader, a module of its own | `zuarrow` |
 | The static checks, a module of their own | `zulint` |
 | `zu.h`, the copy this binding was written against | `include` |
 | One static library per platform, one module each | `lib/<goos>-<goarch>` |
 | Which of the three linking modes is in force | `linking.go`, `linking_system.go`, `linking_static.go` |
-| Tagging the libraries and then the client | `scripts/release.sh` |
+| Tagging the libraries, then the client, then `zuarrow` | `scripts/release.sh` |
 
-Six modules in one `go.work`, which is the client and the five libraries, and that is what makes a fresh clone build with nothing installed. `go mod tidy` is the one command it does not cover. `zulint` is a seventh module and a workspace of its own on purpose, so that the `golang.org/x/tools` it needs never reaches anybody who only imports the client.
+Seven modules in one `go.work`, which is the client, the five libraries and `zuarrow`, and that is what makes a fresh clone build with nothing installed. `go mod tidy` is the one command it does not cover. The workspace names the six unpublished modules in `replace` directives as well as in `use`, and the comment at the top of `go.work` says why: a `use` directive is enough until something in the workspace imports a module from outside it, and then the build list has to be computed, and computing it means reading the `go.mod` of every requirement by version. `zulint` is an eighth module and a workspace of its own on purpose, so that the `golang.org/x/tools` it needs never reaches anybody who only imports the client.
 
 ## License
 

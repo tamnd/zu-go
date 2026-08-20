@@ -11,8 +11,9 @@
 // failure, or a data race at run time.
 //
 //   - [ViewAfterClose], for a borrowed column read after the result it
-//     was borrowed from is closed. The columnar readers hand back memory
-//     the engine owns, and closing the result frees it.
+//     was borrowed from is closed or handed to Arrow. The columnar
+//     readers hand back memory the engine owns, closing the result frees
+//     it, and exporting it gives it to somebody else.
 //   - [RowsErr], for a loop over a result that never asks whether the
 //     loop ended because the rows ran out or because something failed.
 //   - [ConnShare], for a *zu.Conn reachable from two goroutines. A

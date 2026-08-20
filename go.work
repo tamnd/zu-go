@@ -1,8 +1,9 @@
-// The client and the five libraries it links against are one repository
-// and six modules. This workspace is what makes a clone build without
-// them being published first, and it is also what CI uses, because a
-// library built by the workflow in this repository is the one that has
-// to be tested rather than whatever the proxy already has.
+// The client, the five libraries it links against and the Arrow reader
+// beside it are one repository and seven modules. This workspace is
+// what makes a clone build without them being published first, and it
+// is also what CI uses, because a library built by the workflow in this
+// repository is the one that has to be tested rather than whatever the
+// proxy already has.
 //
 // A workspace in a dependency is ignored, so this changes nothing for
 // anybody who has installed the client. It goes away when the libraries
@@ -14,6 +15,16 @@
 // fail. Nothing else does, including go build, go vet, go test and the
 // race detector. scripts/release.sh is what ends it, by tagging the
 // libraries and rewriting the requirements to name what it tagged.
+//
+// The replacements below are why building zuarrow works at all. Being
+// in the use list is enough for a module nothing outside the workspace
+// is resolved against, which is what the client is: with zu_static it
+// imports no library module and the tools never walk the graph. zuarrow
+// imports arrow-go, and placing an import from outside the workspace
+// means computing the build list, and computing it means reading the
+// go.mod of every requirement by version, v0.0.0 included. A use
+// directive does not answer that read and a replacement does. They go
+// out with the same release that rewrites the requirements.
 
 go 1.26.6
 
@@ -24,4 +35,17 @@ use (
 	./lib/linux-amd64
 	./lib/linux-arm64
 	./lib/windows-amd64
+	./zuarrow
 )
+
+replace github.com/tamnd/zu-go/lib/darwin-amd64 v0.0.0 => ./lib/darwin-amd64
+
+replace github.com/tamnd/zu-go/lib/darwin-arm64 v0.0.0 => ./lib/darwin-arm64
+
+replace github.com/tamnd/zu-go/lib/linux-amd64 v0.0.0 => ./lib/linux-amd64
+
+replace github.com/tamnd/zu-go/lib/linux-arm64 v0.0.0 => ./lib/linux-arm64
+
+replace github.com/tamnd/zu-go/lib/windows-amd64 v0.0.0 => ./lib/windows-amd64
+
+replace github.com/tamnd/zu-go v0.0.0 => .

@@ -439,6 +439,9 @@ func TestBreakingOutOfTheRangeLoopStopsIt(t *testing.T) {
 	if seen != 1 {
 		t.Errorf("a loop that broke after one row saw %d", seen)
 	}
+	if err := rows.Err(); err != nil {
+		t.Errorf("breaking out of the loop reported %v", err)
+	}
 }
 
 func TestARowIsReachableByItsIndexWithoutMovingTheCursor(t *testing.T) {
@@ -476,6 +479,9 @@ func TestARowIsReachableByItsIndexWithoutMovingTheCursor(t *testing.T) {
 	}
 	if seen != 3 {
 		t.Errorf("the loop saw %d rows after the result was read by index", seen)
+	}
+	if err := rows.Err(); err != nil {
+		t.Errorf("reading by index and then looping reported %v", err)
 	}
 }
 

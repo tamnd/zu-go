@@ -119,6 +119,9 @@ func BenchmarkScan1000(b *testing.B) {
 		if err := rows.Err(); err != nil {
 			b.Fatal(err)
 		}
+		if err := rows.Err(); err != nil {
+			b.Fatal(err)
+		}
 		rows.Close()
 	}
 }
@@ -139,6 +142,9 @@ func BenchmarkScan1000Direct(b *testing.B) {
 				b.Fatal(err)
 			}
 			sum += n
+		}
+		if err := rows.Err(); err != nil {
+			b.Fatal(err)
 		}
 		rows.Close()
 	}

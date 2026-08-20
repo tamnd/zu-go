@@ -26,6 +26,21 @@ jobs:
       - name: Every file is formatted
         run: test ! -s /tmp/unformatted
 
+  # The analyzers are their own module, they import nothing from the
+  # client, and they read source rather than linking against anything,
+  # so they need no library and no Rust either.
+  zulint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.6"
+      - run: go vet ./...
+        working-directory: zulint
+      - run: go test -count=1 ./...
+        working-directory: zulint
+
   # What everybody who runs `go get` gets: the library that ships with
   # this module, no Rust, no pkg-config, nothing installed. It is first
   # because it is the mode that has to work, and it finishes in about a
@@ -63,6 +78,16 @@ jobs:
 
       - if: steps.lib.outputs.there == 'yes'
         run: go vet ./...
+
+      # The client held to its own analyzers, which is the only honest
+      # way to ship them. The one place it provokes a mistake on
+      # purpose says so with a zulint:ignore comment.
+      - if: steps.lib.outputs.there == 'yes'
+        name: zulint
+        run: |
+          set -eu
+          (cd zulint && go build -o "$RUNNER_TEMP/zulint" ./cmd/zulint)
+          "$RUNNER_TEMP/zulint" ./...
 
       - if: steps.lib.outputs.there == 'yes'
         run: go test -count=1 ./...

@@ -1,0 +1,15 @@
+// A workspace of one, which is a strange thing to write down until you
+// see what it is for. The workspace one directory up ties the client to
+// the five library modules it links against, and every module in a
+// workspace shares one module graph, so putting this one in it would
+// make a build of an analyzer depend on resolving five libraries that
+// are not published yet.
+//
+// This analyzer imports nothing from the client. It reads source. So
+// it stands on its own, and the only reason this file exists is that a
+// workspace found by walking up would otherwise claim a directory it
+// does not list.
+
+go 1.26.6
+
+use .

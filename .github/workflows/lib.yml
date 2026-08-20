@@ -1,12 +1,12 @@
 name: Libraries
 
 # The five static libraries this client ships are built here and
-# nowhere else. Every one of them is built on a runner whose own
-# platform is the target, because a cross build is a second thing to
-# get wrong and a native build is the same build a contributor would
-# run. What comes out is committed into lib/<goos>-<goarch>/ by a pull
-# request, so that the archive a release links against is one that
-# somebody looked at.
+# nowhere else. Four of them are built on a runner whose own platform
+# is the target, because a cross build is a second thing to get wrong
+# and a native build is the same build a contributor would run. What
+# comes out is committed into lib/<goos>-<goarch>/ by a pull request,
+# so that the archive a release links against is one that somebody
+# looked at.
 #
 # It is on workflow_dispatch and not on push, because rebuilding five
 # libraries on every commit to this repository would be five builds of
@@ -43,7 +43,13 @@ jobs:
           - runner: macos-latest
             target: aarch64-apple-darwin
             dir: darwin-arm64
-          - runner: macos-13
+          # The fifth, and the one that is not native. GitHub retired
+          # the Intel macOS runner, so this is cross-compiled from the
+          # arm64 one, which is what the engine's own release workflow
+          # does with the same target. It is the one row where a cross
+          # build costs nothing: a static archive is compiled and never
+          # linked, so there is no linker here to be the wrong one.
+          - runner: macos-latest
             target: x86_64-apple-darwin
             dir: darwin-amd64
           # In a container whose glibc is 2.28, because a static
@@ -97,11 +103,17 @@ jobs:
       # the crate also declares a cdylib and a rlib, and asking for all
       # three leaves an archive three times the size with the same 132
       # symbols in it.
+      #
+      # --color never, and it is load bearing. This job sets
+      # CARGO_TERM_COLOR to always, and the line the sed below is
+      # looking for then arrives wrapped in escape codes, so the match
+      # fails, syslibs comes out empty, and a build that compiled
+      # perfectly fails on the line after it.
       - name: Build libzu
         run: |
           set -eu
           log=$(mktemp)
-          cargo rustc --release -p zu-capi --target ${{ matrix.target }} \
+          cargo rustc --color never --release -p zu-capi --target ${{ matrix.target }} \
               --crate-type staticlib -- --print native-static-libs 2>&1 | tee "$log"
           syslibs="$(sed -n 's/^note: native-static-libs: //p' "$log" | tail -1)"
           test -n "$syslibs"

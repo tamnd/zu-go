@@ -1,0 +1,167 @@
+name: Libraries
+
+# The five static libraries this client ships are built here and
+# nowhere else. Every one of them is built on a runner whose own
+# platform is the target, because a cross build is a second thing to
+# get wrong and a native build is the same build a contributor would
+# run. What comes out is committed into lib/<goos>-<goarch>/ by a pull
+# request, so that the archive a release links against is one that
+# somebody looked at.
+#
+# It is on workflow_dispatch and not on push, because rebuilding five
+# libraries on every commit to this repository would be five builds of
+# an engine that did not change.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: The tamnd/zu revision to build from
+        default: main
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: ${{ matrix.dir }}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            dir: darwin-arm64
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            dir: darwin-amd64
+          # In a container whose glibc is 2.28, because a static
+          # archive carries the symbol versions it was compiled
+          # against and a binary linking it will not start on anything
+          # older. Built on the runner's own Ubuntu it would refuse to
+          # run on half the distributions still in service.
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            dir: linux-amd64
+            container: quay.io/pypa/manylinux_2_28_x86_64
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            dir: linux-arm64
+            container: quay.io/pypa/manylinux_2_28_aarch64
+          # The gnu ABI and not msvc, because cgo drives a gcc-family
+          # linker on windows and cannot read an archive an MSVC
+          # toolchain produced.
+          - runner: windows-latest
+            target: x86_64-pc-windows-gnu
+            dir: windows-amd64
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: tamnd/zu
+          ref: ${{ inputs.ref }}
+
+      - name: The gcc that x86_64-pc-windows-gnu links through
+        if: runner.os == 'Windows'
+        run: echo 'C:\msys64\mingw64\bin' >> "$GITHUB_PATH"
+
+      # The container has no Rust, because it is an image for building
+      # Python wheels and Rust is not why anybody reaches for it.
+      - name: Rust
+        if: matrix.container != ''
+        run: |
+          set -eu
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
+            sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - run: rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # One invocation builds the archive and says what it needs beside
+      # it. --crate-type staticlib rather than a plain build, because
+      # the crate also declares a cdylib and a rlib, and asking for all
+      # three leaves an archive three times the size with the same 132
+      # symbols in it.
+      - name: Build libzu
+        run: |
+          set -eu
+          log=$(mktemp)
+          cargo rustc --release -p zu-capi --target ${{ matrix.target }} \
+              --crate-type staticlib -- --print native-static-libs 2>&1 | tee "$log"
+          syslibs="$(sed -n 's/^note: native-static-libs: //p' "$log" | tail -1)"
+          test -n "$syslibs"
+          mkdir -p out
+          cp target/${{ matrix.target }}/release/libzu.a out/libzu.a
+          printf '%s\n' "$syslibs" > out/NATIVE_STATIC_LIBS
+          git rev-parse HEAD > out/REVISION
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.dir }}
+          path: out/
+
+  # A pull request rather than a push to main, because a library is the
+  # one thing in this repository nobody can read in a diff, and the
+  # least a reviewer can do is see which revision it came from and how
+  # big it got.
+  propose:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: built
+
+      - name: Put every library where its module is
+        run: |
+          set -eu
+          for dir in built/*/; do
+            name="$(basename "$dir")"
+            test -d "lib/$name"
+            cp "$dir/libzu.a" "$dir/NATIVE_STATIC_LIBS" "$dir/REVISION" "lib/$name/"
+          done
+          # The flags in prebuilt.go are written by hand, because what
+          # rustc names and what cgo already links are not the same set
+          # on every platform. This only reports the difference.
+          for f in lib/*/NATIVE_STATIC_LIBS; do
+            echo "$(dirname "$f"): $(cat "$f")"
+          done
+
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          rev="$(cat lib/*/REVISION | sort -u | head -1)"
+          short="${rev:0:12}"
+          branch="libs-$short"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add lib
+          if git diff --cached --quiet; then
+            echo "the libraries already in the repository are the ones this build produced"
+            exit 0
+          fi
+          git commit -m "the static libraries, built from zu $short"
+          git push -u origin "$branch"
+          gh pr create --title "the static libraries, built from zu $short" --body \
+            "Five archives, one per platform, each built on a runner of its own platform from tamnd/zu at $rev by the Libraries workflow. Nothing here was built by hand. NATIVE_STATIC_LIBS in each directory is what rustc said that target needs at link time, and prebuilt.go is what this client actually passes, which is the same list minus whatever cgo already puts on the link."

@@ -33,12 +33,15 @@
 // condition, and whether running the same statement again could work.
 // [errors.Is] against a [Status] answers the coarser question.
 //
-// This package is cgo over the engine's C ABI. It links against libzu,
-// which the README says how to build and where to point pkg-config.
+// This package is cgo over the engine's C ABI. The static library for
+// your platform ships with it, so `go get` and `go build` need no Rust
+// toolchain, no pkg-config and nothing installed. See [linking] for the
+// two build tags that point it somewhere else.
+//
+// [linking]: https://github.com/tamnd/zu-go#linking
 package zu
 
 /*
-#cgo pkg-config: libzu
 #include <stdlib.h>
 #include <zu.h>
 

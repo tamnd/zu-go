@@ -198,9 +198,20 @@ A `*zu.DB` is safe to share. A `*zu.Conn` is not, and neither is the `*zu.Rows` 
 
 A result owns its rows outright, so it stays readable after the connection that produced it has gone back to a pool. What it does not outlive is `Close`, and that includes every slice the columnar readers handed back.
 
+## Static checks
+
+Three of the rules above are the kind a compiler cannot enforce and a review does not catch, so there is a vet tool for them in [`zulint`](zulint).
+
+```
+go install github.com/tamnd/zu-go/zulint/cmd/zulint@latest
+zulint ./...
+```
+
+It reports a columnar view used after the result it borrows from was closed, a loop over a result that never reads `rows.Err()`, and a `*zu.Conn` that two goroutines can reach. All three compile, pass review, and are a use-after-free, a swallowed failure and a refused query at run time. It reads source: no engine, no C toolchain, no database. This client runs it on itself in CI, and the one test that provokes the third on purpose says so with a `//zulint:ignore` comment.
+
 ## Not here yet
 
-The pieces of this client that milestone DX4 lists and this release does not have: the `purego` build over `dlopen` for `CGO_ENABLED=0`, and the `zulint` analyzer for the mistakes that actually happen, which are a columnar view used after `Close`, a loop that never reads `rows.Err()`, and a `*zu.Conn` shared across goroutines.
+The pieces of this client that milestone DX4 lists and this release does not have: the `purego` build over `dlopen` for `CGO_ENABLED=0`.
 
 The engine itself has no way to name a node's table, so a `zu.Node` carries the numeric table id the ABI gives it.
 
@@ -228,12 +239,13 @@ Inside this repository:
 |---|---|
 | The client | the root package, `github.com/tamnd/zu-go` |
 | The `database/sql` driver | `zusql` |
+| The static checks, a module of their own | `zulint` |
 | `zu.h`, the copy this binding was written against | `include` |
 | One static library per platform, one module each | `lib/<goos>-<goarch>` |
 | Which of the three linking modes is in force | `linking.go`, `linking_system.go`, `linking_static.go` |
 | Tagging the libraries and then the client | `scripts/release.sh` |
 
-Six modules in one repository, which is why there is a `go.work`. It is what makes a fresh clone build with nothing installed, and `go mod tidy` is the one command it does not cover.
+Six modules in one `go.work`, which is the client and the five libraries, and that is what makes a fresh clone build with nothing installed. `go mod tidy` is the one command it does not cover. `zulint` is a seventh module and a workspace of its own on purpose, so that the `golang.org/x/tools` it needs never reaches anybody who only imports the client.
 
 ## License
 

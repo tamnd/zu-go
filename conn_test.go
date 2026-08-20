@@ -133,6 +133,9 @@ func TestTwoGoroutinesOnOneConnectionAreRefusedRatherThanRaced(t *testing.T) {
 
 	<-started
 	time.Sleep(10 * time.Millisecond)
+	// One connection and two goroutines on purpose, because the refusal
+	// is what this test is about.
+	//zulint:ignore
 	rows, seen := conn.Query(context.Background(), "RETURN 1 AS one")
 	if seen == nil {
 		rows.Close()

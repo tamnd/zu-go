@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Release this repository, which is one client and five library
-# modules that live inside it.
+# Release this repository, which is one client, the five library
+# modules it links against, and the analyzers, all in here.
 #
 #     scripts/release.sh v0.11.0
 #
@@ -78,6 +78,10 @@ tag() {
 for lib in $libs; do
     tag "lib/$lib/$version"
 done
+
+# The analyzers are a module too, and one nobody has to wait for: the
+# client does not require them, so this is the whole of their release.
+tag "zulint/$version"
 
 # The proxy has to have seen them before the client's go.mod can name
 # them, and it sees them the first time somebody asks.

@@ -157,6 +157,15 @@ jobs:
               --stage "$GITHUB_WORKSPACE/dist/libzu" \
               --built target/release --target "$target" --syslibs "$syslibs"
           echo "PKG_CONFIG_PATH=$GITHUB_WORKSPACE/dist/libzu/lib/pkgconfig" >> "$GITHUB_ENV"
+          # Where the loader looks, which is not where pkg-config
+          # looks. A shared library staged into a directory of its own
+          # is found at link time by the -L pkg-config hands over and
+          # not found at run time by anything, so a test binary links
+          # and then dies on the first exec. This is the variable a
+          # user unpacking the same tarball sets, and on macOS the
+          # dylib carries an absolute install name so it never needed
+          # one.
+          echo "LD_LIBRARY_PATH=$GITHUB_WORKSPACE/dist/libzu/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       # The ABI revision the header declares is checked by the test
       # suite itself rather than by a step here, so that it fails the

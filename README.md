@@ -91,8 +91,11 @@ cargo run -p xtask -- package --stage dist/libzu --built target/release \
 
 ```
 export PKG_CONFIG_PATH=/path/to/zu/dist/libzu/lib/pkgconfig
+export LD_LIBRARY_PATH=/path/to/zu/dist/libzu/lib     # linux only
 go test -tags zu_system ./...
 ```
+
+Two variables and not one, on Linux, because pkg-config answers the compiler and nothing answers the loader. A library staged into a directory of its own is found at link time by the `-L` that pkg-config hands over and found at run time by nothing, so a binary links and then dies on the first exec with a message about a shared object rather than about a database. On macOS the dylib carries an absolute install name and needs no second variable.
 
 The CLI is built beside the library because the staging step packages both, and the `--syslibs` line is asked of rustc rather than written down because the answer differs per target and changes with the toolchain.
 

@@ -65,7 +65,7 @@ func (s *Stmt) Query(ctx context.Context, args ...Arg) (*Rows, error) {
 	if err := caused(fail(st, e), w.end()); err != nil {
 		return nil, err
 	}
-	return newRows(h)
+	return newRows(s.conn, h)
 }
 
 // Exec binds the arguments, runs the statement and throws its result

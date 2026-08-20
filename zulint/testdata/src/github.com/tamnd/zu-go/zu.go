@@ -7,6 +7,7 @@ package zu
 import (
 	"context"
 	"iter"
+	"unsafe"
 )
 
 type DB struct{}
@@ -52,3 +53,5 @@ func (r *Rows) Float64s(col int) ([]float64, error) { return nil, nil }
 func (r *Rows) NodeOffsets(col int) ([]uint64, error) { return nil, nil }
 
 func (r *Rows) Valid(col int) ([]byte, error) { return nil, nil }
+
+func (r *Rows) ArrowStream(out unsafe.Pointer, rowsPerBatch int) error { return nil }

@@ -19,7 +19,13 @@ import (
 // A Rows is not safe for use from two goroutines at once, which is the
 // same rule as the connection it came from and for the same reason.
 type Rows struct {
-	h    *C.zu_result
+	h *C.zu_result
+	// conn is the connection the result came from, kept because one
+	// thing a result cannot answer on its own is what a node column's
+	// table is called: a node carries the id of its table and the
+	// catalog is what turns that into a name. Nothing else here needs
+	// it, and a connection that has closed is no worse than none.
+	conn *Conn
 	cols []string
 	n    int64
 	i    int64
@@ -32,8 +38,8 @@ type Rows struct {
 // newRows takes ownership of a result handle and reads the column
 // names off it once, since they are what every row is read through and
 // they do not change between rows.
-func newRows(h *C.zu_result) (*Rows, error) {
-	r := &Rows{h: h, i: -1, n: int64(C.zu_result_rows(h))}
+func newRows(c *Conn, h *C.zu_result) (*Rows, error) {
+	r := &Rows{h: h, conn: c, i: -1, n: int64(C.zu_result_rows(h))}
 	cols := int(C.zu_result_cols(h))
 	r.cols = make([]string, cols)
 	for c := range cols {

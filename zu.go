@@ -66,7 +66,7 @@ func Version() string {
 
 // ABIVersion is the revision of the C ABI the linked library was
 // compiled with. The two numbers are counts rather than the halves of
-// a decimal, so 0.11 is the revision after 0.10 and a caller comparing
+// a decimal, so 0.12 is the revision after 0.11 and a caller comparing
 // them compares each on its own.
 func ABIVersion() string {
 	return C.GoString(C.zu_go_abi_version())

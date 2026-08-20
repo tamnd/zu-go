@@ -11,7 +11,7 @@ It reads source. No engine, no C toolchain, no database, and it does not need th
 
 ## The checks
 
-**`viewafterclose`** finds a column borrowed from a result and used after the result was closed.
+**`viewafterclose`** finds a column borrowed from a result and used after the result was closed or handed away.
 
 `Int64s`, `Float64s`, `NodeOffsets` and `Valid` hand back the engine's own memory rather than a copy, which is the whole point of them: a million integers cost nothing to read and nothing to hold. What they cost is a lifetime. The slice is valid until `Rows.Close` and not one statement longer, and Go's type system has nothing to say about that.
 
@@ -24,6 +24,16 @@ for _, id := range ids { // ids borrows from rows, and rows.Close has already fr
 ```
 
 Whether a use can run after a Close is asked of the control flow graph and not of the line numbers, so a use written above the Close and reachable from it counts. The other shape it reports is a view returned out of the function that closes the result, which is the same bug written so that it crashes in the caller.
+
+Handing the result to Arrow ends the same lifetime and is caught the same way, because that call moves the buffers rather than copying them. `Rows.ArrowStream`, `zuarrow.Reader` and `zuarrow.ReaderBatched` all count, and a borrow read after one of them is the worse version of this bug: the memory is alive and belongs to the consumer, so it works until the consumer releases the batch.
+
+```go
+ids, _ := rows.Int64s(0)
+rdr, _ := zuarrow.Reader(rows)
+for _, id := range ids { // ids borrows from rows, and zuarrow.Reader has already handed it to an Arrow consumer
+	sum += id
+}
+```
 
 **`rowserr`** finds a loop over a result that never asks why it ended.
 

@@ -1,0 +1,27 @@
+// The client and the five libraries it links against are one repository
+// and six modules. This workspace is what makes a clone build without
+// them being published first, and it is also what CI uses, because a
+// library built by the workflow in this repository is the one that has
+// to be tested rather than whatever the proxy already has.
+//
+// A workspace in a dependency is ignored, so this changes nothing for
+// anybody who has installed the client. It goes away when the libraries
+// are tagged and the go.mod requirements can stand on their own.
+//
+// One thing it does not cover: go mod tidy reads a module on its own
+// and never the workspace around it, so until the libraries are tagged
+// it will try to fetch lib/<goos>-<goarch>@v0.0.0 from the proxy and
+// fail. Nothing else does, including go build, go vet, go test and the
+// race detector. scripts/release.sh is what ends it, by tagging the
+// libraries and rewriting the requirements to name what it tagged.
+
+go 1.26.6
+
+use (
+	.
+	./lib/darwin-amd64
+	./lib/darwin-arm64
+	./lib/linux-amd64
+	./lib/linux-arm64
+	./lib/windows-amd64
+)

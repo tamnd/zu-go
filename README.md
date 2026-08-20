@@ -54,9 +54,30 @@ go get github.com/tamnd/zu-go
 
 Longer than the other clients' first example, and correct by the standards of Go. A binding that hides errors to look short is a binding Go programmers will not trust.
 
-## Building
+## Linking
 
-This client is cgo over the engine's C ABI, so it needs `libzu` where pkg-config can find it. Until the static libraries are vendored, build the engine and point at what it staged.
+This client is cgo over the engine's C ABI, so something has to supply `libzu` and `zu.h`. There are three ways it can happen and you pick one with a build tag. The default needs nothing installed.
+
+**The library that ships with the module.** No tag, no Rust toolchain, no pkg-config, nothing on your machine. `go get github.com/tamnd/zu-go` pulls in a static archive for your platform along with the client and links it in.
+
+```
+go get github.com/tamnd/zu-go
+go build ./...
+```
+
+The archives live in `lib/<goos>-<goarch>`, one module each, and each one carries a `REVISION` naming the commit of the engine it was built from and a `NATIVE_STATIC_LIBS` naming what rustc said that build needs at link time. They are built by the [Libraries workflow](.github/workflows/lib.yml) on a runner whose own platform is the target, never by hand. Five platforms ship:
+
+| GOOS | GOARCH | Rust target |
+| --- | --- | --- |
+| darwin | arm64 | `aarch64-apple-darwin` |
+| darwin | amd64 | `x86_64-apple-darwin` |
+| linux | amd64 | `x86_64-unknown-linux-gnu` |
+| linux | arm64 | `aarch64-unknown-linux-gnu` |
+| windows | amd64 | `x86_64-pc-windows-gnu` |
+
+The windows archive is built for the gnu ABI rather than msvc, because cgo drives a gcc-family linker there and cannot read an archive an MSVC toolchain produced.
+
+**A libzu you installed,** through pkg-config, with `-tags zu_system`. This is the mode a bisect wants, because it links whatever the engine's working tree just produced rather than the archive this module froze.
 
 ```
 git clone https://github.com/tamnd/zu
@@ -70,10 +91,58 @@ cargo run -p xtask -- package --stage dist/libzu --built target/release \
 
 ```
 export PKG_CONFIG_PATH=/path/to/zu/dist/libzu/lib/pkgconfig
-go test ./...
+go test -tags zu_system ./...
 ```
 
 The CLI is built beside the library because the staging step packages both, and the `--syslibs` line is asked of rustc rather than written down because the answer differs per target and changes with the toolchain.
+
+**An archive of your own,** named in `CGO_LDFLAGS`, with `-tags zu_static`. Nothing is looked up and nothing is assumed. The header that ships with this module is still the one that gets included, which is what keeps the binding honest about the ABI it was written against.
+
+Building the archive that goes there is one command, and `--crate-type staticlib` rather than a plain build is the whole trick: the crate also declares a cdylib and a rlib, and asking cargo for all three leaves an archive three times the size with the same symbols in it. The same command prints what has to be linked beside it, which is a different list on every platform and is not worth guessing at.
+
+```
+cargo rustc --release -p zu-capi --crate-type staticlib -- --print native-static-libs
+```
+
+```
+export CGO_LDFLAGS="/path/to/libzu.a $syslibs"
+go test -tags zu_static ./...
+```
+
+On macOS the three it names are already on every cgo link, so passing them again only makes the linker warn about duplicates. That is what the `NATIVE_STATIC_LIBS` file beside each shipped archive is for: it is the full list rustc gave, kept next to the shorter one `prebuilt.go` actually passes, so the difference is visible rather than lost.
+
+A platform with no shipped archive and no tag is told so by name at compile time rather than by an undefined symbol at link time. So is `CGO_ENABLED=0`, which cannot build this client at all.
+
+### Cross-compiling
+
+cgo turns itself off the moment `GOOS` or `GOARCH` stops being the host's, so every recipe here starts by turning it back on and pointing `CC` at a compiler that targets what you asked for. The shipped archive for the target is picked up on its own.
+
+From a Mac to the other Mac, using the toolchain you already have:
+
+```
+CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CC="clang -arch x86_64" go build ./...
+CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CC="clang -arch arm64" go build ./...
+```
+
+To Linux and to Windows, using [zig](https://ziglang.org) as the cross compiler, which is one download and covers every target here. Go hands the C compiler a few flags zig declines, so it goes through a wrapper rather than being named directly:
+
+```
+cat > /usr/local/bin/zcc <<'EOF'
+#!/bin/sh
+exec zig cc -target "$ZIG_TARGET" "$@"
+EOF
+chmod +x /usr/local/bin/zcc
+```
+
+```
+ZIG_TARGET=x86_64-linux-gnu.2.28  CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 CC=zcc go build ./...
+ZIG_TARGET=aarch64-linux-gnu.2.28 CGO_ENABLED=1 GOOS=linux   GOARCH=arm64 CC=zcc go build ./...
+ZIG_TARGET=x86_64-windows-gnu     CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=zcc go build ./...
+```
+
+The glibc version in the target triple is the floor the binary will run against. 2.28 is the right number because the shipped Linux archives are built in a `manylinux_2_28` container, which is the whole reason the Libraries workflow uses one. Naming a newer version produces a binary that will not start on an older distribution, and naming an older one does not make the archive inside it any older.
+
+Cross-compiling **to** darwin from anything that is not darwin is the one direction none of this covers, because it needs Apple's SDK and Apple's linker. Build those two on a Mac.
 
 ## What you get
 
@@ -131,7 +200,7 @@ A result owns its rows outright, so it stays readable after the connection that 
 
 ## Not here yet
 
-The pieces of this client that milestone DX4 lists and this release does not have: vendored static libraries per platform with the cross-compilation recipes, the `purego` build over `dlopen` for `CGO_ENABLED=0`, and the `zulint` analyzer for the mistakes that actually happen, which are a columnar view used after `Close`, a loop that never reads `rows.Err()`, and a `*zu.Conn` shared across goroutines.
+The pieces of this client that milestone DX4 lists and this release does not have: the `purego` build over `dlopen` for `CGO_ENABLED=0`, and the `zulint` analyzer for the mistakes that actually happen, which are a columnar view used after `Close`, a loop that never reads `rows.Err()`, and a `*zu.Conn` shared across goroutines.
 
 The engine itself has no way to name a node's table, so a `zu.Node` carries the numeric table id the ABI gives it.
 
@@ -152,6 +221,19 @@ Pre-1.0 and pre-release. Nothing is published yet. The engine, the C ABI, and th
 | This client | here |
 
 If a bug reproduces through the `zu` CLI, it belongs in [tamnd/zu](https://github.com/tamnd/zu/issues), not here.
+
+Inside this repository:
+
+| What | Where |
+|---|---|
+| The client | the root package, `github.com/tamnd/zu-go` |
+| The `database/sql` driver | `zusql` |
+| `zu.h`, the copy this binding was written against | `include` |
+| One static library per platform, one module each | `lib/<goos>-<goarch>` |
+| Which of the three linking modes is in force | `linking.go`, `linking_system.go`, `linking_static.go` |
+| Tagging the libraries and then the client | `scripts/release.sh` |
+
+Six modules in one repository, which is why there is a `go.work`. It is what makes a fresh clone build with nothing installed, and `go mod tidy` is the one command it does not cover.
 
 ## License
 

@@ -26,17 +26,68 @@ jobs:
       - name: Every file is formatted
         run: test ! -s /tmp/unformatted
 
-  # The client is cgo over libzu, so there is nothing to vet and nothing
-  # to test without the library. Every job below builds it from the
-  # engine at the revision this client is written against, which is what
-  # makes a red job here mean the client is wrong rather than that
-  # somebody's machine had an old copy installed.
-  test:
+  # What everybody who runs `go get` gets: the library that ships with
+  # this module, no Rust, no pkg-config, nothing installed. It is first
+  # because it is the mode that has to work, and it finishes in about a
+  # minute because there is nothing to build but Go.
+  vendored:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         go: ["1.26.6", "stable"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+
+      # A platform whose archive the Libraries workflow has not
+      # produced yet is not a failure of this client, and a red job
+      # here would say it was. It says which it is instead.
+      - name: Is there a library for this platform
+        id: lib
+        run: |
+          set -eu
+          dir="lib/$(go env GOOS)-$(go env GOARCH)"
+          if [ -f "$dir/libzu.a" ]; then
+            echo "there=yes" >> "$GITHUB_OUTPUT"
+            ls -l "$dir/libzu.a"
+            echo "built from zu $(cat "$dir/REVISION")"
+          else
+            echo "there=no" >> "$GITHUB_OUTPUT"
+            echo "no archive in $dir yet, run the Libraries workflow"
+          fi
+
+      - if: steps.lib.outputs.there == 'yes'
+        run: go vet ./...
+
+      - if: steps.lib.outputs.there == 'yes'
+        run: go test -count=1 ./...
+
+      # The concurrency rules here are the whole reason the connection
+      # holds a lock, and the interrupt is a second goroutine reaching
+      # into a connection another one is inside of. Neither is worth
+      # anything unchecked.
+      - if: steps.lib.outputs.there == 'yes'
+        run: go test -race -count=1 ./...
+
+      # Not for the numbers, which mean nothing on a shared runner, but
+      # because a benchmark is code that only this runs.
+      - if: steps.lib.outputs.there == 'yes'
+        run: go test -run '^$' -bench . -benchtime 10x ./...
+
+  # The same suite against the engine at its own HEAD, through
+  # pkg-config, which is the mode a bisect wants. This is what makes a
+  # red job mean the client is wrong about the engine rather than that
+  # the shipped archive is old.
+  engine:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -48,11 +99,18 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go }}
+          go-version: "1.26.6"
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
+
+      # The header that ships here is the one this binding was written
+      # against, and it is checked against the engine rather than
+      # trusted, because a stale copy would compile and then read a
+      # struct that moved.
+      - name: The vendored header is the engine's header
+        run: diff -u engine/crates/zu-capi/include/zu.h include/zu.h
 
       - name: Build libzu
         working-directory: engine
@@ -78,16 +136,18 @@ jobs:
       # The ABI revision the header declares is checked by the test
       # suite itself rather than by a step here, so that it fails the
       # same way on a laptop.
-      - run: go vet ./...
+      - run: go vet -tags zu_system ./...
 
-      - run: go test -count=1 ./...
+      - run: go test -tags zu_system -count=1 ./...
 
-      # The concurrency rules here are the whole reason the connection
-      # holds a lock, and the interrupt is a second goroutine reaching
-      # into a connection another one is inside of. Neither is worth
-      # anything unchecked.
-      - run: go test -race -count=1 ./...
+      - run: go test -tags zu_system -race -count=1 ./...
 
-      # Not for the numbers, which mean nothing on a shared runner, but
-      # because a benchmark is code that only this runs.
-      - run: go test -run '^$' -bench . -benchtime 10x ./...
+      # The third mode, which is somebody's own archive named in
+      # CGO_LDFLAGS. It is the escape hatch, so it is checked that it
+      # still opens.
+      - name: Your own archive, through CGO_LDFLAGS
+        run: |
+          set -eu
+          export CGO_LDFLAGS="$GITHUB_WORKSPACE/dist/libzu/lib/libzu.a $(
+            sed -n 's/^Libs.private: //p' "$GITHUB_WORKSPACE/dist/libzu/lib/pkgconfig/libzu.pc")"
+          go test -tags zu_static -count=1 ./...

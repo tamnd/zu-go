@@ -186,13 +186,13 @@ Ten thousand integers, on an M4:
 
 | | |
 |---|---|
-| `zuarrow.Reader`, read through arrow-go | 25 µs, 44 allocs |
-| `Rows.Int64s`, the borrowed column | 262 µs |
-| the export itself, `Rows.ArrowStream` | 10.6 µs, 2 allocs |
+| `zuarrow.Reader`, read through arrow-go | 18 µs, 44 allocs |
+| `Rows.Int64s`, the borrowed column | 6.8 µs, 1 alloc |
+| the export itself, `Rows.ArrowStream` | 6 µs, 2 allocs |
 
-The export is one microsecond per thousand rows because nothing is per row: the executor's own column buffers are moved into the Arrow arrays and the stream is handed the result. What the borrowed column costs on top of that is the row build the C accessors still go through, which is a thing to fix in the engine rather than here.
+The export is well under a microsecond per thousand rows because nothing is per row: the executor's own column buffers are moved into the Arrow arrays and the stream is handed the result. The borrowed column costs about the same, and for the same reason, since the C accessor under it hands back the buffer the executor filled rather than converting one of its own. Almost all of what is left in both numbers is the loop that adds ten thousand integers up.
 
-Two consequences of moving rather than copying, and both are the price of the number above. Exporting spends the result: the `*zu.Rows` is empty afterwards, every slice a columnar reader handed out before it now belongs to the Arrow consumer, and [`zulint`](zulint) reports a read of one. And a result the engine had to build across rows, which is anything with an `ORDER BY`, has no buffers to move and falls back to a cell at a time, which is fifty times slower and still correct.
+Two consequences of moving rather than copying, and both are the price of the number above. Exporting spends the result: the `*zu.Rows` is empty afterwards, every slice a columnar reader handed out before it now belongs to the Arrow consumer, and [`zulint`](zulint) reports a read of one. And a result the engine had to build across rows, which is anything with an `ORDER BY`, has no buffers to move and falls back to a cell at a time, which is closer to a hundred times slower and still correct.
 
 `Rows.ArrowStream` is the layer under all of this, for a program that already has an `ArrowArrayStream` to fill and its own idea of what to do with it. It takes the address of one as an `unsafe.Pointer` and fills it in place, and the consumer's release callback is what frees the result.
 

@@ -146,10 +146,13 @@ func BenchmarkCollect(b *testing.B) {
 	})
 }
 
-// BenchmarkColumn is the whole column borrowed from the result rather
-// than read a row at a time. Nothing is copied and nothing is
-// converted, so this is the number the row at a time paths are
-// measured against.
+// BenchmarkColumn is the whole column read in one call rather than a
+// row at a time, which is the number the row at a time paths above are
+// measured against. The result is the one UNWIND of a literal list
+// gives, which the engine builds across its rows, so the column is
+// converted out of them once on the first call. BenchmarkColumnScanned
+// below is the same call on a result the engine filled down its
+// columns, where there is nothing left to convert.
 func BenchmarkColumn(b *testing.B) {
 	benchRead(b, func(b *testing.B, rows *Rows) {
 		col, err := rows.Int64s(0)
@@ -190,7 +193,9 @@ func BenchmarkArrowStream(b *testing.B) {
 
 // BenchmarkColumnScanned is that same result borrowed straight off the
 // result rather than exported, which is what the number above is
-// measured against.
+// measured against. Both are pointers to the buffers the executor
+// filled, so what separates them is arrow-go and not the engine, and
+// what is left in either is mostly the loop that adds the column up.
 func BenchmarkColumnScanned(b *testing.B) {
 	benchScan(b, func(b *testing.B, rows *Rows) {
 		col, err := rows.Int64s(0)

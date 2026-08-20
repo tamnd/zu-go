@@ -1,1 +1,1 @@
--lSystem -lc -lm
+-liconv -framework CoreFoundation -lSystem -lc -lm

@@ -247,6 +247,30 @@ func (c *Conn) RowsRead() (uint64, error) {
 	return uint64(n), nil
 }
 
+// TableName is what a table id is called: the Table of a [Node] or of a
+// [Rel], which the engine hands over as a number because that is what a
+// row holds. Node and rel tables share one id space, so this answers
+// for both kinds.
+//
+// The empty string and no error when no table has that id. A table
+// cannot be called nothing, so the empty string is unambiguous, and an
+// id nothing answers for is a caller who made a number up rather than a
+// failure the connection had. A closed connection is the error, since
+// that one is a program to fix.
+//
+// The name is copied out before this returns. The engine lends it until
+// the next call of this on the same connection, which is not a lifetime
+// a Go string can have.
+func (c *Conn) TableName(table uint32) (string, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.h == nil {
+		return "", misuse("the connection is closed")
+	}
+	var n C.size_t
+	return text(C.zu_conn_table_name(c.h, C.uint32_t(table), &n), n), nil
+}
+
 // Duplicate opens a second connection on the same database, without a
 // path. This is what a pool calls once it has handed the [DB] back,
 // and it is the only way to a second connection on a database in

@@ -312,13 +312,30 @@ func (row Row) cell(col int) (*C.zu_value, error) {
 // A null reads as zero in all three of them, which [Rows.Valid] is
 // what tells apart.
 
+// column is the check the four readers below share. The ABI answers
+// ZU_MISUSE for a column that is not there and carries no error with
+// it, so the number the caller passed would reach them as "zu: misuse"
+// and nothing else. It is their own arithmetic that went wrong, so the
+// message holds the number and what the result actually has, the same
+// as [Row.cell] says it for a cell.
+func (r *Rows) column(col int) error {
+	if r.h == nil {
+		return misuse("the result is closed")
+	}
+	if col < 0 || col >= len(r.cols) {
+		return misuse("column " + strconv.Itoa(col) + " of a result with " +
+			strconv.Itoa(len(r.cols)) + " columns")
+	}
+	return nil
+}
+
 // Int64s is a whole column of integers, without a copy. Bools read
 // here too, as zero and one, because a column is one array and
 // something has to go in every slot. A result with no rows answers
 // nil, which is a slice of no rows rather than a failure.
 func (r *Rows) Int64s(col int) ([]int64, error) {
-	if r.h == nil {
-		return nil, misuse("the result is closed")
+	if err := r.column(col); err != nil {
+		return nil, err
 	}
 	var p *C.int64_t
 	st := C.zu_result_col_i64(r.h, C.uint32_t(col), &p)
@@ -335,8 +352,8 @@ func (r *Rows) Int64s(col int) ([]int64, error) {
 // here too, converted, which is the one place this client widens a
 // value without being asked: a column is one array of one type.
 func (r *Rows) Float64s(col int) ([]float64, error) {
-	if r.h == nil {
-		return nil, misuse("the result is closed")
+	if err := r.column(col); err != nil {
+		return nil, err
 	}
 	var p *C.double
 	st := C.zu_result_col_f64(r.h, C.uint32_t(col), &p)
@@ -355,8 +372,8 @@ func (r *Rows) Float64s(col int) ([]float64, error) {
 // client ends up handing an internal row number to a user who asked
 // for an identity.
 func (r *Rows) NodeOffsets(col int) ([]uint64, error) {
-	if r.h == nil {
-		return nil, misuse("the result is closed")
+	if err := r.column(col); err != nil {
+		return nil, err
 	}
 	var p *C.uint64_t
 	st := C.zu_result_col_node_offset(r.h, C.uint32_t(col), &p)
@@ -374,8 +391,8 @@ func (r *Rows) NodeOffsets(col int) ([]uint64, error) {
 // readers put in a null's slot are told from the zeroes that are
 // values.
 func (r *Rows) Valid(col int) ([]byte, error) {
-	if r.h == nil {
-		return nil, misuse("the result is closed")
+	if err := r.column(col); err != nil {
+		return nil, err
 	}
 	var p *C.uint8_t
 	st := C.zu_result_col_valid(r.h, C.uint32_t(col), &p)

@@ -80,21 +80,36 @@ func (c *Conn) InTransaction() (bool, error) {
 	return open != 0, nil
 }
 
-// Query runs a statement inside the transaction.
+// Query runs a statement inside the transaction. It answers [ErrDone]
+// once the transaction has been committed or rolled back, because a
+// statement spelled through a finished transaction is not inside it
+// and running it anyway would write outside the block a reader can see.
 func (t *Tx) Query(ctx context.Context, q string, args ...Arg) (*Rows, error) {
+	if t.done.Load() {
+		return nil, ErrDone
+	}
 	return t.conn.Query(ctx, q, args...)
 }
 
 // Exec runs a statement inside the transaction and throws its result
-// away.
+// away. [ErrDone] once the transaction has finished, for the reason
+// [Tx.Query] gives.
 func (t *Tx) Exec(ctx context.Context, q string, args ...Arg) error {
+	if t.done.Load() {
+		return ErrDone
+	}
 	return t.conn.Exec(ctx, q, args...)
 }
 
 // Prepare compiles a statement on the connection this transaction runs
 // on. The statement outlives the transaction, since it belongs to the
-// connection.
+// connection, but compiling one through a transaction that has already
+// finished is the same mistake [Tx.Query] refuses and answers the same
+// [ErrDone].
 func (t *Tx) Prepare(ctx context.Context, q string) (*Stmt, error) {
+	if t.done.Load() {
+		return nil, ErrDone
+	}
 	return t.conn.Prepare(ctx, q)
 }
 

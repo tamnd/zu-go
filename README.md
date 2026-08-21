@@ -16,7 +16,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	db, err := zu.Open("social.zu1")
+	db, err := zu.Create("social.zu1")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,7 +28,17 @@ func main() {
 	}
 	defer conn.Close()
 
-	rows, err := conn.Query(ctx, `MATCH (p:Person) RETURN p.name AS name, p.id AS id LIMIT 5`)
+	for _, q := range []string{
+		`INSERT (p:person {id: 1, name: 'ada'})`,
+		`INSERT (p:person {id: 2, name: 'grace'})`,
+		`INSERT (p:person {id: 3, name: 'lynn'})`,
+	} {
+		if err := conn.Exec(ctx, q); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	rows, err := conn.Query(ctx, `MATCH (p:person) RETURN p.name AS name, p.id AS id`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,7 +62,9 @@ func main() {
 go get github.com/tamnd/zu-go
 ```
 
-Longer than the other clients' first example, and correct by the standards of Go. A binding that hides errors to look short is a binding Go programmers will not trust.
+Longer than the other clients' first example, and correct by the standards of Go. A binding that hides errors to look short is a binding Go programmers will not trust. It writes `social.zu1` beside you and prints three names, and it is run exactly as printed by this repository's own tests, which is the only way a first example stays true.
+
+Run it twice and the second run fails, because `Create` refuses a path that is already there and `Open` is the call for a database that exists. They are two calls rather than one flag so that a deployment given the wrong path is told about it instead of quietly starting from empty.
 
 ## Linking
 
@@ -204,13 +216,47 @@ Two consequences of moving rather than copying, and both are the price of the nu
 `zusql` registers the driver under the name `zu`, for a program that is already built around `database/sql` and would rather not carry a second shape of database handle.
 
 ```go
+package main
+
 import (
+	"context"
 	"database/sql"
+	"fmt"
+	"log"
 
 	_ "github.com/tamnd/zu-go/zusql"
 )
 
-db, err := sql.Open("zu", "social.zu1?create=true")
+func main() {
+	ctx := context.Background()
+
+	db, err := sql.Open("zu", "social.zu1?create=true")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	if _, err := db.ExecContext(ctx, `INSERT (p:person {id: 1, name: 'ada'})`); err != nil {
+		log.Fatal(err)
+	}
+
+	rows, err := db.QueryContext(ctx, `MATCH (p:person) RETURN p.name AS name`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(name)
+	}
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
 ```
 
 The connection string is the path, or `:memory:`, followed by `create`, `read_only`, `threads` and `memory_limit`. Every connection from one `sql.DB` shares one `zu.DB`, which is what makes `:memory:` a database the pool can hand out rather than a new empty one per connection. `sql.Open` opens nothing, so a bad path fails at the first `Ping` and fails the same way on every later connection.

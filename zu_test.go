@@ -11,7 +11,7 @@ import (
 // The test below is what fails when the header moves, which is the
 // point at which somebody has to read what changed rather than find
 // out from a caller.
-const abi = "0.12"
+const abi = "0.13"
 
 // memory opens a database that never touches the filesystem and one
 // connection on it, closed when the test ends. Almost every test wants
@@ -187,6 +187,9 @@ func TestAConnectionThatIsClosedRefusesRatherThanCrashes(t *testing.T) {
 	}
 	if _, err := conn.Begin(t.Context()); !errors.Is(err, Misuse) {
 		t.Errorf("beginning on a closed connection answers %v", err)
+	}
+	if _, err := conn.TableName(0); !errors.Is(err, Misuse) {
+		t.Errorf("naming a table on a closed connection answers %v", err)
 	}
 }
 

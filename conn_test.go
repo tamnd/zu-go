@@ -212,3 +212,41 @@ func TestAReadOnlyDatabaseWillNotBeCreated(t *testing.T) {
 	}
 	db.Close()
 }
+
+func TestATableIdSaysWhatItIsATableOf(t *testing.T) {
+	conn := memory(t)
+	if err := conn.Exec(t.Context(), "INSERT (p:person {id: 1})"); err != nil {
+		t.Fatalf("a person does not go in: %v", err)
+	}
+	rows := query(t, conn, "MATCH (p:person) RETURN p AS p")
+	if !rows.Next() {
+		t.Fatal("the person that went in does not come back")
+	}
+	var node Node
+	if err := rows.Scan(&node); err != nil {
+		t.Fatalf("a node does not scan: %v", err)
+	}
+
+	name, err := conn.TableName(node.Table)
+	if err != nil {
+		t.Fatalf("a live connection will not name a table: %v", err)
+	}
+	if name != "person" {
+		t.Errorf("table %d is called %q and the statement called it person", node.Table, name)
+	}
+}
+
+func TestATableIdNothingAnswersForIsNotAFailure(t *testing.T) {
+	// A caller who made a number up gets nothing back and no error,
+	// because nothing went wrong on the connection. The empty string
+	// is the answer rather than an ambiguous one: a table cannot be
+	// called nothing.
+	conn := memory(t)
+	name, err := conn.TableName(1 << 20)
+	if err != nil {
+		t.Fatalf("naming a table that is not there is not an error: %v", err)
+	}
+	if name != "" {
+		t.Errorf("a table id nothing answers for is called %q", name)
+	}
+}

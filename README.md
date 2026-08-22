@@ -166,6 +166,7 @@ Cross-compiling **to** darwin from anything that is not darwin is the one direct
 - Range-over-func iteration: `rows.All()` is an `iter.Seq[Row]`, and `zu.Iter[T]` is an `iter.Seq2[T, error]` that streams into your own type.
 - Three levels of reading, in the order you reach for them: `Scan` into concrete destinations, `Collect[T]` and `Iter[T]` into a struct matched by `zu` tags or by name, and `Int64s`, `Float64s`, `NodeOffsets` and `Valid` for a whole column borrowed from the result without a copy.
 - The seven temporal types spelled out rather than flattened into `time.Time`. A date is a `zu.Date`, a time of day is a `zu.LocalTime`, and a year-month duration is a `zu.YearMonth`, because a `time.Time` made out of a time of day is a date somebody invented. The three that name an instant scan into a `time.Time` when you ask for one.
+- A byte string as a `[]byte` and a character string as a `string`, kept apart the way the engine keeps them apart. `X'0041'` is two octets and not the letter A, so it scans into a `[]byte` and not into a `string`, and a `string` scans into a `[]byte` because that is what is underneath it.
 - Transactions with `Begin`, `BeginReadOnly`, `Commit` and `Rollback`, where a rollback deferred beside a commit answers `zu.ErrDone` rather than a failure.
 - A whole result as Arrow record batches for the price of a pointer a column, through `zuarrow`, which is the section below.
 

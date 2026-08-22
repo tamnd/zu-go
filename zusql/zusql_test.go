@@ -451,7 +451,7 @@ func TestADeadlineEndsAStatementThatIsRunning(t *testing.T) {
 
 func TestTheColumnTypesAreReadOffTheFirstRow(t *testing.T) {
 	db := open(t)
-	rows, err := db.Query("RETURN 1 AS a, 'two' AS b, 3.5 AS c, true AS d, [1] AS e")
+	rows, err := db.Query("RETURN 1 AS a, 'two' AS b, 3.5 AS c, true AS d, [1] AS e, X'00FF' AS f")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -471,6 +471,7 @@ func TestTheColumnTypesAreReadOffTheFirstRow(t *testing.T) {
 		{"c", reflect.TypeFor[float64](), "float"},
 		{"d", reflect.TypeFor[bool](), "bool"},
 		{"e", reflect.TypeFor[[]any](), "list"},
+		{"f", reflect.TypeFor[[]byte](), "bytes"},
 	}
 	if len(types) != len(want) {
 		t.Fatalf("the result has %d columns and %d were asked for", len(types), len(want))

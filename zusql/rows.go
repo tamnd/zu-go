@@ -84,6 +84,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeFor[float64]()
 	case zu.TypeString:
 		return reflect.TypeFor[string]()
+	case zu.TypeBytes:
+		return reflect.TypeFor[[]byte]()
 	case zu.TypeNode:
 		return reflect.TypeFor[zu.Node]()
 	case zu.TypeRel:

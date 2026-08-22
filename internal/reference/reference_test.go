@@ -17,10 +17,11 @@
 // It lives here, in a package of its own, for two reasons. It is a
 // test rather than a workflow step so that it fails the same way on a
 // laptop as in CI, which is the rule the ABI check already follows. And
-// it is out of the client package so that it imports nothing but the
-// standard library: the gate then answers on a checkout with no libzu
-// staged and no Rust installed, in seconds, rather than only in the
-// jobs that got as far as linking.
+// it is out of the client package so that it links nothing: the gate
+// then answers on a checkout with no libzu staged and no Rust
+// installed, in a fraction of a second, rather than only in the jobs
+// that got as far as linking. The walk it shares with the idiom gate is
+// in internal/source.
 //
 // Exported means exported to somebody. internal is excluded because the
 // language already promises nobody outside can import it and
@@ -34,71 +35,34 @@ package reference
 import (
 	"go/ast"
 	"go/doc"
-	"go/parser"
 	"go/token"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tamnd/zu-go/internal/source"
 )
 
-// root is the top of the repository, found by walking up for the
-// workspace file rather than by counting how deep this package happens
-// to sit.
+// root is the top of the checkout.
 func root(t *testing.T) string {
 	t.Helper()
-	dir, err := filepath.Abs(".")
+	dir, err := source.Root()
 	if err != nil {
-		t.Fatalf("there is no working directory: %v", err)
+		t.Fatalf("this is not a checkout of this repository: %v", err)
 	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.work")); err == nil {
-			return dir
-		}
-		up := filepath.Dir(dir)
-		if up == dir {
-			t.Fatal("walked to the filesystem root without finding go.work, so this is not a checkout of this repository")
-		}
-		dir = up
-	}
+	return dir
 }
 
-// published walks the repository for the directories godoc would
-// publish: those holding non-test Go source, minus internal and minus
-// anything under it.
+// published is every directory godoc would publish.
 func published(t *testing.T) []string {
 	t.Helper()
-	top := root(t)
-	seen := map[string]bool{}
-	err := filepath.WalkDir(top, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			// testdata is invisible to the go tool, internal is
-			// invisible to everyone outside, and a dot directory is
-			// not source. None of the three is reference.
-			name := d.Name()
-			if path != top && (name == "internal" || name == "testdata" || strings.HasPrefix(name, ".")) {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
-			seen[filepath.Dir(path)] = true
-		}
-		return nil
-	})
+	dirs, err := source.Published(root(t))
 	if err != nil {
 		t.Fatalf("the repository does not walk: %v", err)
 	}
-	if len(seen) == 0 {
+	if len(dirs) == 0 {
 		t.Fatal("no Go source found, which means the walk is wrong and not that there is none")
-	}
-	dirs := make([]string, 0, len(seen))
-	for dir := range seen {
-		dirs = append(dirs, dir)
 	}
 	return dirs
 }
@@ -121,9 +85,7 @@ type bare struct {
 func undocumented(t *testing.T, dir string) []bare {
 	t.Helper()
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, func(fi fs.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, parser.ParseComments)
+	pkgs, err := source.Parse(fset, dir, true)
 	if err != nil {
 		t.Fatalf("%s does not parse: %v", dir, err)
 	}
@@ -242,7 +204,7 @@ func TestEveryPublishedNameSaysWhatItIs(t *testing.T) {
 // documented and unexported ones there too and checks they are not.
 func TestTheGateSeesABareNameAndOnlyABareName(t *testing.T) {
 	dir := t.TempDir()
-	source := `// Package sample is here to be read.
+	sample := `// Package sample is here to be read.
 package sample
 
 // A Thing is a thing.
@@ -269,7 +231,7 @@ const Known = 1
 
 const Unknown = 2
 `
-	if err := os.WriteFile(filepath.Join(dir, "sample.go"), []byte(source), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "sample.go"), []byte(sample), 0o644); err != nil {
 		t.Fatalf("the sample does not write: %v", err)
 	}
 	found := map[string]bool{}

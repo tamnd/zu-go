@@ -41,19 +41,21 @@ jobs:
       - run: go test -count=1 ./...
         working-directory: zulint
 
-  # The published reference is whatever godoc read out of the source, so
-  # the only way it can be short is a name nobody commented. That check
-  # reads source and links nothing, so it belongs beside the other two
-  # that answer in seconds rather than in the jobs that build a library
-  # first.
-  reference:
+  # What can be read off the source rather than run: that every
+  # published name says what it is, and that the published signatures
+  # are the shapes Go writes. Both link nothing, so they belong beside
+  # the other two that answer in seconds rather than in the jobs that
+  # build a library first. With cgo off the packages that need it drop
+  # out of the pattern on their own, so a gate added tomorrow is run
+  # here without this line changing.
+  surface:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26.6"
-      - run: CGO_ENABLED=0 go test -count=1 -v ./internal/reference/
+      - run: CGO_ENABLED=0 go test -count=1 -v ./internal/...
 
   # What everybody who runs `go get` gets: the library that ships with
   # this module, no Rust, no pkg-config, nothing installed. It is first

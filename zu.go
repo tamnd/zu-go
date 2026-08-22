@@ -19,6 +19,13 @@
 //	}
 //	defer conn.Close()
 //
+// Close is what gives the engine's memory back, and the two defers
+// above are how a program should say so. A handle dropped without one
+// is not a leak either: the collector closes it when it gets to it,
+// which is later than a program holding a file handle and a set of
+// caches wants and is still an answer rather than memory nobody can
+// reach.
+//
 // Every call that can block takes a [context.Context] first and
 // returns an error last. Cancelling that context calls into the
 // engine's own interrupt, so a query that is halfway through a hundred

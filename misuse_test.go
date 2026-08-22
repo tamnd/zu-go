@@ -7,7 +7,7 @@
 // they bound, the column they scanned. It says what was expected
 // instead wherever there is something to say. And it is the engine's
 // own sentence rather than a syscall's, because "failed to fill whole
-// buffer" is a true statement about a everyone that tells nobody which file
+// buffer" is a true statement about a read that tells nobody which file
 // was not a database.
 //
 // Clear also means the right status, since a Go caller matches with
@@ -24,7 +24,7 @@
 // a SIGSEGV in a goroutine nobody can recover.
 //
 // No leak is checked from outside the call that would cause one, three
-// ways: every case is followed by a everyone on the connection it was aimed
+// ways: every case is followed by a read on the connection it was aimed
 // at, the failing opens are repeated five hundred times, which is past
 // the descriptor limit a process starts with, and the descriptors
 // themselves are counted where the operating system will say.
@@ -48,6 +48,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // everyone is a statement the seeded database answers, run after every
@@ -486,26 +487,132 @@ func TestAThousandConnectionsOpenedAndClosedLeaveNothingBehind(t *testing.T) {
 	}
 }
 
-func TestAThousandConnectionsDroppedRatherThanClosedLeaveNothingBehind(t *testing.T) {
+func TestConnectionsDroppedRatherThanClosedGiveTheirFileHandlesBack(t *testing.T) {
+	// On disk and not in memory, which is the whole point. A database
+	// in memory holds no descriptor, so a version of this test written
+	// against one counts a number that cannot move and passes whether
+	// the connections were given back or not. It did, for as long as
+	// this test has existed, while every connection dropped here was
+	// leaked outright. What found that was the sanitizer job, and what
+	// this is now is the same question asked from inside the process.
+	dir := t.TempDir()
+	db, err := Create(filepath.Join(dir, "dropped.zu1"))
+	if err != nil {
+		t.Fatalf("a database on disk does not open: %v", err)
+	}
+	defer db.Close()
+
+	// Two hundred and not a thousand. Each one holds a descriptor
+	// until the collector gets to it, and the cleanups run on their
+	// own schedule rather than on the loop's, so the peak here is not
+	// something the test controls. Two hundred is under the limit a
+	// process starts with on every system this runs on, and it is
+	// already an order of magnitude more than the leak needs to show.
+	const n = 200
+	before := openFiles(t)
+	for i := range n {
+		if _, err := db.Connect(t.Context()); err != nil {
+			t.Fatalf("connection %d: %v", i, err)
+		}
+	}
+	// Twice, because a cleanup registered during a collection runs
+	// after it, and then a wait, because a cleanup is queued by the
+	// collector and run by a goroutine of its own. Neither of those is
+	// a promise about when, which is the reason Close exists and the
+	// reason this waits rather than measuring straight after.
+	runtime.GC()
+	runtime.GC()
+	deadline := time.Now().Add(30 * time.Second)
+	after := openFiles(t)
+	for after > before+8 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		runtime.GC()
+		after = openFiles(t)
+	}
+	if after > before+8 {
+		t.Errorf("%d dropped connections left %d descriptors behind", n, after-before)
+	}
+}
+
+func TestAConnectionDroppedInsideATransactionRollsItBack(t *testing.T) {
+	// The descriptor count says a handle went. This says the engine
+	// ran the close rather than the operating system reclaiming
+	// something on its own, because a rollback is work only the close
+	// does, and it is visible from a second connection: the write is
+	// not there and the write lock is free.
 	db, err := Memory()
 	if err != nil {
 		t.Fatalf("a database in memory does not open: %v", err)
 	}
 	defer db.Close()
 
-	before := openFiles(t)
-	for i := range 1000 {
-		if _, err := db.Connect(t.Context()); err != nil {
-			t.Fatalf("connection %d: %v", i, err)
+	setup, err := db.Connect(t.Context())
+	if err != nil {
+		t.Fatalf("connecting: %v", err)
+	}
+	defer setup.Close()
+	if err := setup.Exec(t.Context(), "INSERT (p:person {uid: 1})"); err != nil {
+		t.Fatalf("seeding: %v", err)
+	}
+
+	// In a function of its own so that the connection and the
+	// transaction are unreachable when it returns. A local still in
+	// scope is a local the collector must assume is live.
+	func() {
+		conn, err := db.Connect(t.Context())
+		if err != nil {
+			t.Fatalf("connecting: %v", err)
+		}
+		tx, err := conn.Begin(t.Context())
+		if err != nil {
+			t.Fatalf("beginning: %v", err)
+		}
+		if err := tx.Exec(t.Context(), "INSERT (p:person {uid: 2})"); err != nil {
+			t.Fatalf("inserting: %v", err)
+		}
+	}()
+
+	runtime.GC()
+	runtime.GC()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		rows, err := setup.Query(t.Context(), "MATCH (p:person) RETURN p.uid AS uid")
+		if err != nil {
+			t.Fatalf("counting: %v", err)
+		}
+		n := rows.Len()
+		rows.Close()
+		if n == 1 {
+			return
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("the write of a dropped transaction is still there: %d rows rather than 1", n)
+		}
+		time.Sleep(10 * time.Millisecond)
+		runtime.GC()
+	}
+}
+
+func TestResultsAndStatementsDroppedRatherThanClosedAreGivenBack(t *testing.T) {
+	// Nothing here can be counted from Go. A result and a statement
+	// hold memory inside the library and no descriptor, so the only
+	// thing this asserts on its own is that dropping them is not a
+	// crash. What makes it worth running is the sanitizer job, which
+	// runs this suite with the allocator watched and reports every
+	// block still held at exit: without the cleanup this loop is
+	// twelve hundred leaked allocations and with it there are none.
+	conn := memory(t)
+	for range 200 {
+		stmt, err := conn.Prepare(t.Context(), "RETURN 1 AS one")
+		if err != nil {
+			t.Fatalf("preparing: %v", err)
+		}
+		if _, err := stmt.Query(t.Context()); err != nil {
+			t.Fatalf("running: %v", err)
 		}
 	}
-	// Twice, because a finalizer set during a collection runs in the
-	// next one.
 	runtime.GC()
 	runtime.GC()
-	if after := openFiles(t); after > before+8 {
-		t.Errorf("a thousand dropped connections left %d descriptors behind", after-before)
-	}
 }
 
 func TestADatabaseClosedWithThingsOpenOnItClosesThemToo(t *testing.T) {

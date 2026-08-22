@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"iter"
+	"runtime"
 	"strconv"
 	"unsafe"
 )
@@ -33,6 +34,9 @@ type Rows struct {
 	// sc is where the accessors write, reused for every cell of this
 	// result so that reading one costs no allocation. See [scratch].
 	sc scratch
+	// drop frees the result if this Rows is collected without Close
+	// having been called. See the comment in cleanup.go.
+	drop runtime.Cleanup
 }
 
 // newRows takes ownership of a result handle and reads the column
@@ -51,6 +55,10 @@ func newRows(c *Conn, h *C.zu_result) (*Rows, error) {
 		}
 		r.cols[c] = text(p, n)
 	}
+	// Registered last, so that the two error paths above free the
+	// handle themselves and nothing is registered against a Rows the
+	// caller never sees.
+	r.drop = onDrop(r, freeResult, h)
 	return r, nil
 }
 
@@ -181,10 +189,17 @@ func (r *Rows) Scan(dest ...any) error {
 
 // Close frees the result. It is safe to call twice, and it is what
 // every slice the columnar readers handed back stops being valid at.
+//
+// A Rows dropped without it is freed by the collector instead, which
+// is a backstop and not a plan: a result holds every row it read until
+// it goes, and that is the largest thing this package hands out.
 func (r *Rows) Close() error {
 	if r.h == nil {
 		return nil
 	}
+	// Stopped before the free, which is the order that cannot free
+	// twice. See [DB.Close].
+	r.drop.Stop()
 	C.zu_result_free(r.h)
 	r.h = nil
 	return nil

@@ -70,7 +70,7 @@ Run it twice and the second run fails, because `Create` refuses a path that is a
 
 This client is cgo over the engine's C ABI, so something has to supply `libzu` and `zu.h`. There are three ways it can happen and you pick one with a build tag. The default needs nothing installed.
 
-**The library that ships with the module.** No tag, no Rust toolchain, no pkg-config, nothing on your machine. `go get github.com/tamnd/zu-go` pulls in a static archive for your platform along with the client and links it in.
+**The library that ships with the module.** No tag, no Rust toolchain, no pkg-config, nothing on your machine. The static archive for your platform is a module of its own that the client requires, and `go build` downloads that one and links it in.
 
 ```
 go get github.com/tamnd/zu-go
@@ -87,7 +87,9 @@ The archives live in `lib/<goos>-<goarch>`, one module each, and each one carrie
 | linux | arm64 | `aarch64-unknown-linux-gnu` |
 | windows | amd64 | `x86_64-pc-windows-gnu` |
 
-The windows archive is built for the gnu ABI rather than msvc, because cgo drives a gcc-family linker there and cannot read an archive an MSVC toolchain produced.
+The windows archive is built for the gnu ABI rather than msvc, because cgo drives a gcc-family linker there and cannot read an archive an MSVC toolchain produced. The linux archives are built against glibc, so a musl distribution such as Alpine wants `-tags zu_system` and a `libzu` of its own.
+
+One module each is what makes a build download one archive. `go build`, with the requirement already in your `go.mod`, fetches the platform it links and nothing else: 6 MB over the wire and 29 MB in the module cache. `go get` and `go mod tidy` read the whole module graph rather than the build's, so they fetch all five, which is 27 MB over the wire and 115 MB in the cache. That is the price of adding the dependency and it is paid once, but it is worth knowing before an image build pays it on every layer.
 
 **A libzu you installed,** through pkg-config, with `-tags zu_system`. This is the mode a bisect wants, because it links whatever the engine's working tree just produced rather than the archive this module froze.
 

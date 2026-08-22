@@ -148,8 +148,16 @@ func (s Severity) String() string {
 // statement at all, so a caller that underlines the token asks
 // [Position.Valid] first.
 type Position struct {
-	Line   uint32
+	// Line is which line of the statement, counted from one. Zero
+	// means there is no position, which is what [Position.Valid]
+	// reports.
+	Line uint32
+	// Column is which character of that line, counted from one, so a
+	// line of multi-byte text does not read as wider than it looks.
 	Column uint32
+	// Offset is the same place as a byte index into the whole
+	// statement, counted from zero and always on a character
+	// boundary.
 	Offset uint32
 }
 

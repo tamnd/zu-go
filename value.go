@@ -72,7 +72,10 @@ func (t Type) String() string {
 // The offset is the engine's own row number and not a property. A
 // program that wants an application key reads the property it wrote.
 type Node struct {
-	Table  uint32
+	// Table is which node table the row is in.
+	Table uint32
+	// Offset is the row's number within that table, counted from
+	// zero.
 	Offset uint64
 }
 
@@ -84,9 +87,12 @@ func (n Node) String() string {
 // A Rel is one edge: the table it belongs to and the two node offsets
 // it runs between.
 type Rel struct {
+	// Table is which relationship table the edge is in.
 	Table uint32
-	Src   uint64
-	Dst   uint64
+	// Src is the offset of the node the edge runs from.
+	Src uint64
+	// Dst is the offset of the node the edge runs to.
+	Dst uint64
 }
 
 // String is the edge as a table and its two ends.

@@ -45,7 +45,13 @@ type Conn struct {
 //		`MATCH (p:Person {id: $id}) RETURN p.name AS name`,
 //		zu.Named("id", 42))
 type Arg struct {
-	Name  string
+	// Name is the parameter's name without the leading dollar.
+	// [Named] drops one if it is given, so both spellings arrive
+	// here the same.
+	Name string
+	// Value is what to bind. The Go types that map to the language's
+	// own are listed at [Conn.Query], and anything else is refused
+	// when the statement runs rather than silently converted.
 	Value any
 }
 

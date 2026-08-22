@@ -40,6 +40,8 @@ const (
 
 // A Date is a day, counted from 1970-01-01, with no time and no zone.
 type Date struct {
+	// Days is how many days after 1970-01-01 this is, negative for a
+	// date before it.
 	Days int32
 }
 
@@ -57,6 +59,7 @@ func (d Date) String() string {
 // A LocalTime is a time of day with no date and no zone, as
 // nanoseconds since midnight.
 type LocalTime struct {
+	// Nanos is how far past midnight this is, in nanoseconds.
 	Nanos int64
 }
 
@@ -74,7 +77,11 @@ func (t LocalTime) String() string {
 // midnight in the offset's own day and the offset from UTC in minutes,
 // east positive.
 type ZonedTime struct {
-	Nanos  int64
+	// Nanos is how far past midnight this is in its own zone, in
+	// nanoseconds, and not how far past midnight UTC.
+	Nanos int64
+	// Offset is minutes east of UTC, so 60 is an hour ahead and -300
+	// is five hours behind.
 	Offset int32
 }
 
@@ -92,6 +99,8 @@ func (t ZonedTime) String() string {
 // A LocalDateTime is a date and a time with no zone, as nanoseconds
 // since 1970-01-01T00:00:00.
 type LocalDateTime struct {
+	// Nanos is how far past 1970-01-01T00:00:00 this is, in
+	// nanoseconds, read with no zone at all rather than with UTC.
 	Nanos int64
 }
 
@@ -111,7 +120,12 @@ func (t LocalDateTime) String() string {
 // minutes, east positive. The instant is the value; the offset is how
 // it was said.
 type ZonedDateTime struct {
-	Nanos  int64
+	// Nanos is the instant, as nanoseconds since the epoch in UTC.
+	// Two values with the same Nanos are the same moment however
+	// differently they were written.
+	Nanos int64
+	// Offset is minutes east of UTC, which is how the instant was
+	// said rather than part of which instant it is.
 	Offset int32
 }
 
@@ -131,6 +145,8 @@ func (t ZonedDateTime) String() string {
 // 28, 29, 30 or 31 days depending on which one it lands on, so it
 // cannot be a [time.Duration] without picking one.
 type YearMonth struct {
+	// Months is the length of the duration, negative for one that
+	// runs backwards. A year is twelve of them.
 	Months int64
 }
 

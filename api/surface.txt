@@ -1,0 +1,192 @@
+pkg github.com/tamnd/zu-go, const Closed Status = C.ZU_MISUSE_CLOSED
+pkg github.com/tamnd/zu-go, const Concurrent Status = C.ZU_MISUSE_CONCURRENT
+pkg github.com/tamnd/zu-go, const Conflict Status = C.ZU_CONFLICT
+pkg github.com/tamnd/zu-go, const Corrupt Status = C.ZU_CORRUPT
+pkg github.com/tamnd/zu-go, const DefaultBatch = 65536
+pkg github.com/tamnd/zu-go, const Done Status = C.ZU_DONE
+pkg github.com/tamnd/zu-go, const IO Status = C.ZU_IO
+pkg github.com/tamnd/zu-go, const Interrupted Status = C.ZU_INTERRUPTED
+pkg github.com/tamnd/zu-go, const KindDate TemporalKind = C.ZU_TEMPORAL_DATE
+pkg github.com/tamnd/zu-go, const KindDayTimeDuration TemporalKind = C.ZU_TEMPORAL_DURATION_DAY_TIME
+pkg github.com/tamnd/zu-go, const KindLocalDateTime TemporalKind = C.ZU_TEMPORAL_LOCAL_DATETIME
+pkg github.com/tamnd/zu-go, const KindLocalTime TemporalKind = C.ZU_TEMPORAL_LOCAL_TIME
+pkg github.com/tamnd/zu-go, const KindYearMonthDuration TemporalKind = C.ZU_TEMPORAL_DURATION_YEAR_MONTH
+pkg github.com/tamnd/zu-go, const KindZonedDateTime TemporalKind = C.ZU_TEMPORAL_ZONED_DATETIME
+pkg github.com/tamnd/zu-go, const KindZonedTime TemporalKind = C.ZU_TEMPORAL_ZONED_TIME
+pkg github.com/tamnd/zu-go, const Misuse Status = C.ZU_MISUSE
+pkg github.com/tamnd/zu-go, const OK Status = C.ZU_OK
+pkg github.com/tamnd/zu-go, const Refused Status = C.ZU_ERROR
+pkg github.com/tamnd/zu-go, const SeverityException Severity = C.ZU_SEVERITY_EXCEPTION
+pkg github.com/tamnd/zu-go, const SeverityInformational Severity = C.ZU_SEVERITY_INFORMATIONAL
+pkg github.com/tamnd/zu-go, const SeverityNoData Severity = C.ZU_SEVERITY_NO_DATA
+pkg github.com/tamnd/zu-go, const SeveritySuccess Severity = C.ZU_SEVERITY_SUCCESS
+pkg github.com/tamnd/zu-go, const SeverityWarning Severity = C.ZU_SEVERITY_WARNING
+pkg github.com/tamnd/zu-go, const TypeBindingTable Type = C.ZU_TYPE_BINDING_TABLE
+pkg github.com/tamnd/zu-go, const TypeBool Type = C.ZU_TYPE_BOOL
+pkg github.com/tamnd/zu-go, const TypeBytes Type = C.ZU_TYPE_BYTES
+pkg github.com/tamnd/zu-go, const TypeFloat Type = C.ZU_TYPE_FLOAT
+pkg github.com/tamnd/zu-go, const TypeGraph Type = C.ZU_TYPE_GRAPH
+pkg github.com/tamnd/zu-go, const TypeInt Type = C.ZU_TYPE_INT
+pkg github.com/tamnd/zu-go, const TypeList Type = C.ZU_TYPE_LIST
+pkg github.com/tamnd/zu-go, const TypeNode Type = C.ZU_TYPE_NODE
+pkg github.com/tamnd/zu-go, const TypeNull Type = C.ZU_TYPE_NULL
+pkg github.com/tamnd/zu-go, const TypePath Type = C.ZU_TYPE_PATH
+pkg github.com/tamnd/zu-go, const TypeRecord Type = C.ZU_TYPE_RECORD
+pkg github.com/tamnd/zu-go, const TypeRel Type = C.ZU_TYPE_REL
+pkg github.com/tamnd/zu-go, const TypeString Type = C.ZU_TYPE_STR
+pkg github.com/tamnd/zu-go, const TypeTemporal Type = C.ZU_TYPE_TEMPORAL
+pkg github.com/tamnd/zu-go, const Unsupported Status = C.ZU_UNSUPPORTED
+pkg github.com/tamnd/zu-go, field Arg.Name string
+pkg github.com/tamnd/zu-go, field Arg.Value any
+pkg github.com/tamnd/zu-go, field Config.MemoryLimit uint64
+pkg github.com/tamnd/zu-go, field Config.ReadOnly bool
+pkg github.com/tamnd/zu-go, field Config.Threads int
+pkg github.com/tamnd/zu-go, field Date.Days int32
+pkg github.com/tamnd/zu-go, field Error.Code string
+pkg github.com/tamnd/zu-go, field Error.DocURL string
+pkg github.com/tamnd/zu-go, field Error.Excerpt string
+pkg github.com/tamnd/zu-go, field Error.Message string
+pkg github.com/tamnd/zu-go, field Error.Position Position
+pkg github.com/tamnd/zu-go, field Error.Retryable bool
+pkg github.com/tamnd/zu-go, field Error.Severity Severity
+pkg github.com/tamnd/zu-go, field Error.StandardText string
+pkg github.com/tamnd/zu-go, field Error.Status Status
+pkg github.com/tamnd/zu-go, field LocalDateTime.Nanos int64
+pkg github.com/tamnd/zu-go, field LocalTime.Nanos int64
+pkg github.com/tamnd/zu-go, field Node.Offset uint64
+pkg github.com/tamnd/zu-go, field Node.Table uint32
+pkg github.com/tamnd/zu-go, field Position.Column uint32
+pkg github.com/tamnd/zu-go, field Position.Line uint32
+pkg github.com/tamnd/zu-go, field Position.Offset uint32
+pkg github.com/tamnd/zu-go, field Rel.Dst uint64
+pkg github.com/tamnd/zu-go, field Rel.Src uint64
+pkg github.com/tamnd/zu-go, field Rel.Table uint32
+pkg github.com/tamnd/zu-go, field YearMonth.Months int64
+pkg github.com/tamnd/zu-go, field ZonedDateTime.Nanos int64
+pkg github.com/tamnd/zu-go, field ZonedDateTime.Offset int32
+pkg github.com/tamnd/zu-go, field ZonedTime.Nanos int64
+pkg github.com/tamnd/zu-go, field ZonedTime.Offset int32
+pkg github.com/tamnd/zu-go, func (BindingTable) String() string
+pkg github.com/tamnd/zu-go, func (Graph) String() string
+pkg github.com/tamnd/zu-go, func (c *Conn) Begin(ctx context.Context) (*Tx, error)
+pkg github.com/tamnd/zu-go, func (c *Conn) BeginReadOnly(ctx context.Context) (*Tx, error)
+pkg github.com/tamnd/zu-go, func (c *Conn) Close() error
+pkg github.com/tamnd/zu-go, func (c *Conn) Duplicate(ctx context.Context) (*Conn, error)
+pkg github.com/tamnd/zu-go, func (c *Conn) Exec(ctx context.Context, q string, args ...Arg) error
+pkg github.com/tamnd/zu-go, func (c *Conn) InTransaction() (bool, error)
+pkg github.com/tamnd/zu-go, func (c *Conn) Interrupt() error
+pkg github.com/tamnd/zu-go, func (c *Conn) Prepare(ctx context.Context, q string) (*Stmt, error)
+pkg github.com/tamnd/zu-go, func (c *Conn) Query(ctx context.Context, q string, args ...Arg) (*Rows, error)
+pkg github.com/tamnd/zu-go, func (c *Conn) RowsRead() (uint64, error)
+pkg github.com/tamnd/zu-go, func (c *Conn) TableName(table uint32) (string, error)
+pkg github.com/tamnd/zu-go, func (d Date) String() string
+pkg github.com/tamnd/zu-go, func (d Date) Time() time.Time
+pkg github.com/tamnd/zu-go, func (d YearMonth) String() string
+pkg github.com/tamnd/zu-go, func (db *DB) Close() error
+pkg github.com/tamnd/zu-go, func (db *DB) Connect(ctx context.Context) (*Conn, error)
+pkg github.com/tamnd/zu-go, func (db *DB) InMemory() bool
+pkg github.com/tamnd/zu-go, func (db *DB) Path() string
+pkg github.com/tamnd/zu-go, func (e *Error) Error() string
+pkg github.com/tamnd/zu-go, func (e *Error) Is(target error) bool
+pkg github.com/tamnd/zu-go, func (e *Error) Unwrap() error
+pkg github.com/tamnd/zu-go, func (n Node) String() string
+pkg github.com/tamnd/zu-go, func (p Path) Nodes() []Node
+pkg github.com/tamnd/zu-go, func (p Path) Rels() []Rel
+pkg github.com/tamnd/zu-go, func (p Position) String() string
+pkg github.com/tamnd/zu-go, func (p Position) Valid() bool
+pkg github.com/tamnd/zu-go, func (r *Rows) All() iter.Seq[Row]
+pkg github.com/tamnd/zu-go, func (r *Rows) ArrowStream(out unsafe.Pointer, rowsPerBatch int) error
+pkg github.com/tamnd/zu-go, func (r *Rows) Close() error
+pkg github.com/tamnd/zu-go, func (r *Rows) Columns() []string
+pkg github.com/tamnd/zu-go, func (r *Rows) Err() error
+pkg github.com/tamnd/zu-go, func (r *Rows) Float64s(col int) ([]float64, error)
+pkg github.com/tamnd/zu-go, func (r *Rows) GQLStatus() string
+pkg github.com/tamnd/zu-go, func (r *Rows) Int64s(col int) ([]int64, error)
+pkg github.com/tamnd/zu-go, func (r *Rows) Len() int64
+pkg github.com/tamnd/zu-go, func (r *Rows) Next() bool
+pkg github.com/tamnd/zu-go, func (r *Rows) NodeOffsets(col int) ([]uint64, error)
+pkg github.com/tamnd/zu-go, func (r *Rows) Notices() []*Error
+pkg github.com/tamnd/zu-go, func (r *Rows) Row() Row
+pkg github.com/tamnd/zu-go, func (r *Rows) RowAt(i int64) Row
+pkg github.com/tamnd/zu-go, func (r *Rows) Scan(dest ...any) error
+pkg github.com/tamnd/zu-go, func (r *Rows) Valid(col int) ([]byte, error)
+pkg github.com/tamnd/zu-go, func (r Rel) String() string
+pkg github.com/tamnd/zu-go, func (row Row) Scan(dest ...any) error
+pkg github.com/tamnd/zu-go, func (row Row) Type(col int) (Type, error)
+pkg github.com/tamnd/zu-go, func (row Row) Value(col int) (any, error)
+pkg github.com/tamnd/zu-go, func (row Row) Values() ([]any, error)
+pkg github.com/tamnd/zu-go, func (s *Stmt) Bind(args ...Arg) error
+pkg github.com/tamnd/zu-go, func (s *Stmt) Close() error
+pkg github.com/tamnd/zu-go, func (s *Stmt) Exec(ctx context.Context, args ...Arg) error
+pkg github.com/tamnd/zu-go, func (s *Stmt) Query(ctx context.Context, args ...Arg) (*Rows, error)
+pkg github.com/tamnd/zu-go, func (s Severity) String() string
+pkg github.com/tamnd/zu-go, func (s Status) Error() string
+pkg github.com/tamnd/zu-go, func (s Status) String() string
+pkg github.com/tamnd/zu-go, func (t *Tx) Commit(ctx context.Context) error
+pkg github.com/tamnd/zu-go, func (t *Tx) Conn() *Conn
+pkg github.com/tamnd/zu-go, func (t *Tx) Exec(ctx context.Context, q string, args ...Arg) error
+pkg github.com/tamnd/zu-go, func (t *Tx) Prepare(ctx context.Context, q string) (*Stmt, error)
+pkg github.com/tamnd/zu-go, func (t *Tx) Query(ctx context.Context, q string, args ...Arg) (*Rows, error)
+pkg github.com/tamnd/zu-go, func (t *Tx) Rollback(ctx context.Context) error
+pkg github.com/tamnd/zu-go, func (t LocalDateTime) String() string
+pkg github.com/tamnd/zu-go, func (t LocalDateTime) Time() time.Time
+pkg github.com/tamnd/zu-go, func (t LocalTime) Duration() time.Duration
+pkg github.com/tamnd/zu-go, func (t LocalTime) String() string
+pkg github.com/tamnd/zu-go, func (t Type) String() string
+pkg github.com/tamnd/zu-go, func (t ZonedDateTime) String() string
+pkg github.com/tamnd/zu-go, func (t ZonedDateTime) Time() time.Time
+pkg github.com/tamnd/zu-go, func (t ZonedTime) Duration() time.Duration
+pkg github.com/tamnd/zu-go, func (t ZonedTime) String() string
+pkg github.com/tamnd/zu-go, func ABIVersion() string
+pkg github.com/tamnd/zu-go, func Collect[T any](rows *Rows) ([]T, error)
+pkg github.com/tamnd/zu-go, func Create(path string, opts ...Option) (*DB, error)
+pkg github.com/tamnd/zu-go, func Iter[T any](rows *Rows) iter.Seq2[T, error]
+pkg github.com/tamnd/zu-go, func Memory(opts ...Option) (*DB, error)
+pkg github.com/tamnd/zu-go, func Named(name string, value any) Arg
+pkg github.com/tamnd/zu-go, func Open(path string, opts ...Option) (*DB, error)
+pkg github.com/tamnd/zu-go, func Version() string
+pkg github.com/tamnd/zu-go, func WithConfig(cfg Config) Option
+pkg github.com/tamnd/zu-go, func WithMemoryLimit(bytes uint64) Option
+pkg github.com/tamnd/zu-go, func WithReadOnly() Option
+pkg github.com/tamnd/zu-go, func WithThreads(n int) Option
+pkg github.com/tamnd/zu-go, type Arg struct
+pkg github.com/tamnd/zu-go, type BindingTable struct
+pkg github.com/tamnd/zu-go, type Config struct
+pkg github.com/tamnd/zu-go, type Conn struct
+pkg github.com/tamnd/zu-go, type DB struct
+pkg github.com/tamnd/zu-go, type Date struct
+pkg github.com/tamnd/zu-go, type Error struct
+pkg github.com/tamnd/zu-go, type Graph struct
+pkg github.com/tamnd/zu-go, type LocalDateTime struct
+pkg github.com/tamnd/zu-go, type LocalTime struct
+pkg github.com/tamnd/zu-go, type Node struct
+pkg github.com/tamnd/zu-go, type Option func(*Config)
+pkg github.com/tamnd/zu-go, type Path []any
+pkg github.com/tamnd/zu-go, type Position struct
+pkg github.com/tamnd/zu-go, type Record map[string]any
+pkg github.com/tamnd/zu-go, type Rel struct
+pkg github.com/tamnd/zu-go, type Row struct
+pkg github.com/tamnd/zu-go, type Rows struct
+pkg github.com/tamnd/zu-go, type Severity int32
+pkg github.com/tamnd/zu-go, type Status int32
+pkg github.com/tamnd/zu-go, type Stmt struct
+pkg github.com/tamnd/zu-go, type TemporalKind int32
+pkg github.com/tamnd/zu-go, type Tx struct
+pkg github.com/tamnd/zu-go, type Type int32
+pkg github.com/tamnd/zu-go, type YearMonth struct
+pkg github.com/tamnd/zu-go, type ZonedDateTime struct
+pkg github.com/tamnd/zu-go, type ZonedTime struct
+pkg github.com/tamnd/zu-go, var ErrDone
+pkg github.com/tamnd/zu-go/zuarrow, func Query(ctx context.Context, conn *zu.Conn, q string, args ...zu.Arg) (array.RecordReader, error)
+pkg github.com/tamnd/zu-go/zuarrow, func Reader(rows *zu.Rows) (array.RecordReader, error)
+pkg github.com/tamnd/zu-go/zuarrow, func ReaderBatched(rows *zu.Rows, rowsPerBatch int) (array.RecordReader, error)
+pkg github.com/tamnd/zu-go/zulint, const Ignore = "zulint:ignore"
+pkg github.com/tamnd/zu-go/zulint, const Package = "github.com/tamnd/zu-go"
+pkg github.com/tamnd/zu-go/zulint, func Analyzers() []*analysis.Analyzer
+pkg github.com/tamnd/zu-go/zulint, var ConnShare *analysis.Analyzer
+pkg github.com/tamnd/zu-go/zulint, var RowsErr *analysis.Analyzer
+pkg github.com/tamnd/zu-go/zulint, var ViewAfterClose *analysis.Analyzer
+pkg github.com/tamnd/zu-go/zusql, func (Driver) OpenConnector(name string) (driver.Connector, error)
+pkg github.com/tamnd/zu-go/zusql, func (d Driver) Open(name string) (driver.Conn, error)
+pkg github.com/tamnd/zu-go/zusql, func Underlying(dc any) (*zu.Conn, bool)
+pkg github.com/tamnd/zu-go/zusql, type Driver struct

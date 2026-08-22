@@ -1,0 +1,138 @@
+name: Install
+
+# What a person with nothing on their machine gets.
+#
+# CI runs on a machine that has everything: a Go toolchain the runner
+# image put there, a C compiler, a linker, headers, and whatever the last
+# job left in a cache. It cannot tell you whether this client installs,
+# because it never installs it. This job does, in a container holding the
+# language runtime and nothing else, and it does it every night rather
+# than on every push, because what breaks an install is usually somebody
+# else's release and not a commit here.
+#
+# It installs through a proxy built out of this commit rather than off
+# the network, because the library modules have no tags yet and cannot
+# have them until the first release. The shape is otherwise the shape a
+# user gets: a module of their own, one requirement, `go build`. What the
+# proxy leaves out is the network, the checksum database and the public
+# proxy's reading of a tag, and those three arrive together on the day
+# scripts/release.sh runs.
+
+on:
+  schedule:
+    # Late enough that a base image published during the day is in it.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - README.md
+      - go.mod
+      - "lib/**"
+      - "scripts/install.sh"
+      - "scripts/mkproxy/**"
+      - ".github/workflows/install.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The Go the client asks for, on the image most people who
+          # write Go in a container are already on. pkg-config is on
+          # this image, so it is not in the absent list. That it is
+          # there and finds no zu is the stronger statement anyway, and
+          # the script makes it.
+          - name: the Go the go.mod asks for
+            image: golang:1.26-bookworm
+            absent: rustc cargo cmake
+            setup: ":"
+
+          # Whatever Go is current, which is the row that tells us a
+          # toolchain release broke something before a user does.
+          - name: the Go that is current
+            image: golang:1-bookworm
+            absent: rustc cargo cmake
+            setup: ":"
+
+          # A machine with no Go on it at all, given one, and a C
+          # compiler because cgo needs a C compiler and that is the
+          # honest cost of this client. Everything else is absent,
+          # including pkg-config, which is the row where the full list
+          # means something.
+          - name: a bare machine, given a Go and a compiler
+            image: debian:13-slim
+            absent: rustc cargo cmake pkg-config git make
+            setup: "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gcc libc6-dev >/dev/null"
+            goroot: "yes"
+
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.6"
+
+      # The release that does not exist yet, stood up on disk. Read only
+      # inside the container, so an install cannot write back into the
+      # thing it is installing from.
+      - name: A proxy holding this commit
+        run: go run ./scripts/mkproxy -out "$RUNNER_TEMP/proxy"
+
+      # The bare row gets the runner's toolchain mounted where a Go
+      # install goes. The rows that have their own Go get nothing, which
+      # is the point of having them.
+      - name: What the container is given
+        run: |
+          mount=""
+          if [ -n "${{ matrix.goroot }}" ]; then
+            mount="-v $(go env GOROOT):/usr/local/go:ro"
+          fi
+          echo "MOUNT=$mount" >> "$GITHUB_ENV"
+
+      # /app is a directory inside the container and not a mount, so
+      # every run starts on an empty module and nothing root wrote is
+      # left behind for the runner to trip over.
+      - name: Install and run the quickstart
+        run: |
+          docker run --rm \
+            -v "$PWD:/src:ro" \
+            -v "$RUNNER_TEMP/proxy:/proxy:ro" \
+            $MOUNT \
+            -e SRC=/src -e PROXY=/proxy -e APP=/app \
+            -e ABSENT="${{ matrix.absent }}" \
+            "${{ matrix.image }}" \
+            sh -c "${{ matrix.setup }} && /src/scripts/install.sh"
+
+      # The failure the job is meant to catch, caught. A job that only
+      # ever passes is a job nobody has seen fail, and the failure that
+      # matters here is the one where the archive for this platform is
+      # not in what a user downloads. Take it out of the proxy and the
+      # install has to stop; if it does not, then something on the
+      # machine was linked instead and every pass above meant nothing.
+      - name: The failure the job is meant to catch, caught
+        run: |
+          aside="$RUNNER_TEMP/lib-aside"
+          lib="$RUNNER_TEMP/proxy/github.com/tamnd/zu-go/lib/linux-amd64"
+          mv "$lib" "$aside"
+          set +e
+          docker run --rm \
+            -v "$PWD:/src:ro" \
+            -v "$RUNNER_TEMP/proxy:/proxy:ro" \
+            $MOUNT \
+            -e SRC=/src -e PROXY=/proxy -e APP=/app \
+            -e ABSENT="${{ matrix.absent }}" \
+            "${{ matrix.image }}" \
+            sh -c "${{ matrix.setup }} && /src/scripts/install.sh"
+          status=$?
+          set -e
+          mv "$aside" "$lib"
+          test $status -ne 0 || {
+            echo "the install worked without the library for this platform in it"
+            exit 1
+          }

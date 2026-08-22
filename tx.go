@@ -121,6 +121,10 @@ func (t *Tx) Conn() *Conn {
 
 // Commit keeps what the transaction wrote and publishes it. A commit
 // that answers nil is durable.
+//
+// A context that is already cancelled or past its deadline refuses the
+// commit and leaves the transaction open, so that the deferred rollback
+// beside it is still the thing that ends it.
 func (t *Tx) Commit(ctx context.Context) error {
 	return t.end(ctx, true)
 }
@@ -132,16 +136,42 @@ func (t *Tx) Commit(ctx context.Context) error {
 //
 // beside a commit does on the path where the commit worked. That path
 // is not a failure and ignoring the error there is correct.
+//
+// It runs whatever the context says. Every other call here refuses a
+// context that is already done, because a caller who has given up does
+// not want the result. The result of a rollback is that this connection
+// is not left inside a transaction, and that is not something a caller
+// can stop wanting: the usual deferred rollback is reached most often
+// on the path where something was cancelled, which is the path where it
+// has to work.
 func (t *Tx) Rollback(ctx context.Context) error {
 	return t.end(ctx, false)
 }
 
 func (t *Tx) end(ctx context.Context, commit bool) error {
+	// A commit is a result a caller can stop wanting, so a context
+	// that is already done refuses one. A rollback is not. What a
+	// rollback produces is a connection that is no longer inside a
+	// transaction, and a caller who has given up needs that more than
+	// anybody: refusing would leave the write in place on a connection
+	// about to be closed or handed to the next request, which is the
+	// one outcome nobody asked for.
+	//
+	// The refusal is before the swap rather than after it. Marking the
+	// transaction finished and then refusing leaves the engine inside
+	// a transaction no Tx will ever end, because every later call
+	// answers ErrDone, and the deferred rollback beside the commit is
+	// exactly the call that would have fixed it.
+	if commit {
+		if t.done.Load() {
+			return ErrDone
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
 	if !t.done.CompareAndSwap(false, true) {
 		return ErrDone
-	}
-	if err := ctx.Err(); err != nil {
-		return err
 	}
 	c := t.conn
 	c.mu.RLock()

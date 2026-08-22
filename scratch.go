@@ -45,4 +45,9 @@ type scratch struct {
 	// else is read.
 	txt  *C.char
 	size C.size_t
+	// raw is the borrowed bytes of a byte string, on the same terms as
+	// txt and sharing its length. It is a second pointer rather than a
+	// cast of the first because the accessor that writes it is typed
+	// for octets and not for characters.
+	raw *C.uint8_t
 }

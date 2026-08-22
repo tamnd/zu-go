@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"strconv"
+	"unsafe"
 )
 
 // A Type is what one cell holds. Every cell has one, and a null cell
@@ -28,6 +29,7 @@ const (
 	TypeRecord       Type = C.ZU_TYPE_RECORD
 	TypeGraph        Type = C.ZU_TYPE_GRAPH
 	TypeBindingTable Type = C.ZU_TYPE_BINDING_TABLE
+	TypeBytes        Type = C.ZU_TYPE_BYTES
 )
 
 // String is the type in the language's own word for it.
@@ -59,6 +61,8 @@ func (t Type) String() string {
 		return "graph"
 	case TypeBindingTable:
 		return "binding table"
+	case TypeBytes:
+		return "bytes"
 	default:
 		return "type " + strconv.Itoa(int(t))
 	}
@@ -157,6 +161,7 @@ func (BindingTable) String() string { return "binding table" }
 //   - bool, int and float are bool, int64 and float64
 //   - a string is a string
 //   - a node is a [Node], an edge a [Rel], a walk a [Path]
+//   - a byte string is a []byte
 //   - a list is a []any and a record a [Record]
 //   - a temporal is one of the seven temporal types
 func value(sc *scratch, v *C.zu_value) (any, error) {
@@ -180,6 +185,8 @@ func value(sc *scratch, v *C.zu_value) (any, error) {
 		return float64(sc.f64), nil
 	case TypeString:
 		return str(sc, v)
+	case TypeBytes:
+		return octets(sc, v)
 	case TypeNode:
 		return node(sc, v)
 	case TypeRel:
@@ -215,6 +222,27 @@ func str(sc *scratch, v *C.zu_value) (string, error) {
 		return "", err
 	}
 	return text(sc.txt, sc.size), nil
+}
+
+// octets reads a byte string cell. It goes through its own accessor
+// and not
+// zu_value_str because the octets need not be text, and a client that
+// read them through the string one would have decided on the caller's
+// behalf that they were.
+//
+// The copy is what makes them safe to keep. The engine lends the bytes
+// out of the result and they stop being there at [Rows.Close], and a
+// slice handed back that pointed at them would go on looking valid.
+func octets(sc *scratch, v *C.zu_value) ([]byte, error) {
+	if err := fail(C.zu_value_bytes(v, &sc.raw, &sc.size), nil); err != nil {
+		return nil, err
+	}
+	if sc.raw == nil || sc.size == 0 {
+		// An empty byte string is a value and not a missing one, so it
+		// comes back as a slice of no bytes rather than as nil.
+		return []byte{}, nil
+	}
+	return C.GoBytes(unsafe.Pointer(sc.raw), C.int(sc.size)), nil
 }
 
 // node reads a node cell.

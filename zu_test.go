@@ -11,7 +11,7 @@ import (
 // The test below is what fails when the header moves, which is the
 // point at which somebody has to read what changed rather than find
 // out from a caller.
-const abi = "0.13"
+const abi = "0.14"
 
 // memory opens a database that never touches the filesystem and one
 // connection on it, closed when the test ends. Almost every test wants

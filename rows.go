@@ -213,7 +213,8 @@ type Row struct {
 // nothing to put in the rest.
 //
 // A destination may be a pointer to bool, to any of the sized integers,
-// to float32 or float64, to string or []byte, to any of the graph and
+// to float32 or float64, to string, to []byte, which takes a byte
+// string or the octets of a character string, to any of the graph and
 // temporal types, to [time.Time] or [time.Duration], or to any, which
 // takes whatever the cell holds. A null needs somewhere that can hold
 // one, which is a pointer to a pointer or a pointer to any; a null

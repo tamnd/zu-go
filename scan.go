@@ -149,15 +149,31 @@ func scan(sc *scratch, v *C.zu_value, dest any, col string) error {
 		*d = s
 		return nil
 	case *[]byte:
-		if t != TypeString {
+		// Both, because a byte string is octets and a character string
+		// is octets a reader has decided are text, and a caller who
+		// asked for octets is asking for what is underneath either. It
+		// does not go the other way: a byte string into a *string would
+		// be this client deciding X'0041' is the letter A, which is the
+		// decision the engine keeps two types apart in order not to
+		// make.
+		switch t {
+		case TypeString:
+			s, err := str(sc, v)
+			if err != nil {
+				return err
+			}
+			*d = []byte(s)
+			return nil
+		case TypeBytes:
+			b, err := octets(sc, v)
+			if err != nil {
+				return err
+			}
+			*d = b
+			return nil
+		default:
 			return mismatch(col, t, dest)
 		}
-		s, err := str(sc, v)
-		if err != nil {
-			return err
-		}
-		*d = []byte(s)
-		return nil
 
 	case *Node:
 		if t != TypeNode {

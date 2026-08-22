@@ -380,6 +380,37 @@ func TestATransactionLeftOpenIsRolledBackBeforeTheNextCaller(t *testing.T) {
 	}
 }
 
+// The same, with the caller's context already done, which is the way a
+// connection most often comes back with a transaction still on it. The
+// context that reaches ResetSession is the pool's and not the one the
+// transaction was begun with, and a rollback that consulted it would
+// leave the transaction open on a connection about to be handed to
+// somebody else.
+func TestATransactionIsRolledBackEvenWhenTheCallerHasGivenUp(t *testing.T) {
+	c, err := Driver{}.OpenConnector(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dc, err := c.Connect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dc.Close()
+
+	if _, err := dc.(*conn).Begin(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if err := dc.(*conn).ResetSession(ctx); err != nil {
+		t.Fatalf("putting a connection back with a cancelled context: %v", err)
+	}
+	if !dc.(*conn).IsValid() {
+		t.Error("the transaction is still open, so the next caller inherits one it did not begin")
+	}
+}
+
 func TestAContextThatIsAlreadyDoneStopsTheStatement(t *testing.T) {
 	db := open(t)
 	ctx, cancel := context.WithCancel(t.Context())

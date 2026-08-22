@@ -35,6 +35,9 @@ type Conn struct {
 	// opened, so that Close and the transaction handle agree about
 	// whose work it is to end it.
 	tx atomic.Bool
+	// drop closes the handle if this Conn is collected without Close
+	// having been called. See the comment in cleanup.go.
+	drop runtime.Cleanup
 }
 
 // An Arg is one named parameter of a statement. Parameters are named
@@ -213,7 +216,7 @@ func (c *Conn) Prepare(ctx context.Context, q string) (*Stmt, error) {
 	if err := caused(fail(st, e), w.end()); err != nil {
 		return nil, err
 	}
-	return &Stmt{conn: c, h: h}, nil
+	return newStmt(c, h), nil
 }
 
 // Interrupt stops whatever statement is running on this connection at
@@ -299,7 +302,7 @@ func (c *Conn) Duplicate(ctx context.Context) (*Conn, error) {
 	if err := fail(C.zu_conn_duplicate(c.h, &h, &e), e); err != nil {
 		return nil, err
 	}
-	return &Conn{h: h}, nil
+	return newConn(h), nil
 }
 
 // Close ends the connection. A transaction still running is rolled
@@ -310,12 +313,21 @@ func (c *Conn) Duplicate(ctx context.Context) (*Conn, error) {
 // Close is safe to call twice and waits for calls already inside the
 // engine. Results this connection produced stay readable afterwards,
 // because a result owns its rows outright.
+//
+// A connection dropped without it is closed by the collector instead,
+// and its transaction rolled back the same way. That is the backstop
+// rather than the plan: a connection is a file handle, the catalog,
+// the statistics and the caches, and a program that waits for a
+// collection to give them back is holding all of it in the meantime.
 func (c *Conn) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.h == nil {
 		return nil
 	}
+	// Stopped before the free, which is the order that cannot free
+	// twice. See [DB.Close].
+	c.drop.Stop()
 	C.zu_conn_close(c.h)
 	c.h = nil
 	c.tx.Store(false)

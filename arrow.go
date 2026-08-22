@@ -70,6 +70,14 @@ func (r *Rows) ArrowStream(out unsafe.Pointer, rowsPerBatch int) error {
 	// which is what keeps a caller from freeing what it gave away.
 	// This mirrors it into the Go side of the Rows: there is nothing
 	// left to read, so there is nothing left to say there are rows.
+	//
+	// The cleanup goes with it, and this is the one place where
+	// stopping it is not a tidiness. It holds the handle the engine
+	// has just taken, so a Rows dropped after an export would
+	// otherwise be a second free of a result somebody else now owns,
+	// which is the mistake the NULL above exists to prevent on the
+	// caller's side.
+	r.drop.Stop()
 	r.h = nil
 	r.n = 0
 	r.i = 0

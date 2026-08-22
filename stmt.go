@@ -25,6 +25,9 @@ import (
 type Stmt struct {
 	conn *Conn
 	h    *C.zu_stmt
+	// drop closes the handle if this Stmt is collected without Close
+	// having been called. See the comment in cleanup.go.
+	drop runtime.Cleanup
 }
 
 // Bind sets parameters without running the statement, for a caller
@@ -80,10 +83,17 @@ func (s *Stmt) Exec(ctx context.Context, args ...Arg) error {
 
 // Close releases the statement. It is safe to call twice, and safe
 // after the connection it was prepared on has closed.
+//
+// A statement dropped without it is released by the collector instead,
+// which is a backstop and not a plan: a prepared statement holds a
+// compiled plan until it goes.
 func (s *Stmt) Close() error {
 	if s.h == nil {
 		return nil
 	}
+	// Stopped before the free, which is the order that cannot free
+	// twice. See [DB.Close].
+	s.drop.Stop()
 	C.zu_stmt_close(s.h)
 	s.h = nil
 	return nil

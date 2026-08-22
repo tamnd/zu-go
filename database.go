@@ -27,6 +27,9 @@ type DB struct {
 	// engine's own guard and answers [Concurrent].
 	mu sync.RWMutex
 	h  *C.zu_database
+	// drop closes the handle if this DB is collected without Close
+	// having been called. See the comment in cleanup.go.
+	drop runtime.Cleanup
 }
 
 // A Config is how a database is opened. The zero value is the default
@@ -112,7 +115,7 @@ func Open(path string, opts ...Option) (*DB, error) {
 	if err := fail(st, e); err != nil {
 		return nil, err
 	}
-	return &DB{h: h}, nil
+	return newDB(h), nil
 }
 
 // Create makes a database at path and opens it. The path must not
@@ -131,7 +134,7 @@ func Create(path string, opts ...Option) (*DB, error) {
 	if err := fail(st, e); err != nil {
 		return nil, err
 	}
-	return &DB{h: h}, nil
+	return newDB(h), nil
 }
 
 // Memory makes a database that never touches the filesystem. The
@@ -148,7 +151,7 @@ func Memory(opts ...Option) (*DB, error) {
 	if err := fail(C.zu_database_memory(&cfg, &h, &e), e); err != nil {
 		return nil, err
 	}
-	return &DB{h: h}, nil
+	return newDB(h), nil
 }
 
 // Connect opens a connection on the database. A connection keeps the
@@ -174,7 +177,7 @@ func (db *DB) Connect(ctx context.Context) (*Conn, error) {
 	if err := fail(C.zu_connect(db.h, &h, &e), e); err != nil {
 		return nil, err
 	}
-	return &Conn{h: h}, nil
+	return newConn(h), nil
 }
 
 // Path is what this process calls the database. For one on disk it is
@@ -209,12 +212,20 @@ func (db *DB) InMemory() bool {
 //
 // Close is safe to call twice and safe to call while another goroutine
 // is in a call on the same DB: it waits for that call to return.
+//
+// A DB dropped without it is closed by the collector instead, which is
+// a backstop and not a plan: until that happens the configuration and
+// the path are still held.
 func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if db.h == nil {
 		return nil
 	}
+	// Stopped before the free rather than after it, which is the
+	// order that cannot free twice: once the registration is gone
+	// there is no second caller left to reach the handle.
+	db.drop.Stop()
 	C.zu_database_close(db.h)
 	db.h = nil
 	return nil

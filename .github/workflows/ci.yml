@@ -120,6 +120,69 @@ jobs:
       - if: steps.lib.outputs.there == 'yes'
         run: go test -run '^$' -bench . -benchtime 10x ./... ./zuarrow/...
 
+  # The same suite with the allocator watched, which is the scorecard's
+  # leaks item and the job that answers the question a binding cannot
+  # answer from inside itself: what did it fail to give back.
+  #
+  # A cgo binding holds two kinds of memory and the collector knows
+  # about one of them. What ASan adds is the other: it interposes the
+  # allocator that both sides use, so a block the engine malloc'd is a
+  # block it can account for, and it instruments Go's own reads and
+  # writes, so a slice still pointing into a result that was freed is
+  # caught here rather than as a segfault in somebody's service. The
+  # engine archive is not instrumented, which costs the checks inside
+  # the library and costs nothing here: the mistakes this is written
+  # against are a handle dropped, a handle closed twice and a buffer
+  # read after the thing that owned it went, and all three are visible
+  # at the allocator.
+  #
+  # Valgrind is the other tool and it is not the tool for this. It sees
+  # the instructions rather than the source, which is what makes it
+  # good over a prebuilt library, but a goroutine stack is an anonymous
+  # mapping it cannot tell from a wild pointer, so reflect.Value.call
+  # alone reports over a thousand invalid reads and none of them is
+  # this client. What is left after turning off the checks it cannot do
+  # here is the leak check, and ASan's leak check is already that.
+  #
+  # It is a backstop and not an oracle. A pointer to engine memory that
+  # is still sitting in a Go heap block nothing reads is a pointer the
+  # leak checker can still see, so what it reports is what the
+  # collector has already got through, which is why the misuse suite
+  # counts descriptors from inside the process as well. The two miss
+  # different things.
+  sanitizer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.6"
+
+      # Without this every frame of a report is a hex offset. The
+      # sanitizer runtime looks for llvm-symbolizer on PATH under that
+      # exact name, and the images carry it under a versioned one, so
+      # the path is found and handed over rather than hoped for.
+      - name: The symbolizer the report is read with
+        run: |
+          set -eu
+          sym=$(command -v llvm-symbolizer || ls /usr/bin/llvm-symbolizer-* 2>/dev/null | sort -V | tail -1)
+          test -n "$sym"
+          echo "ASAN_SYMBOLIZER_PATH=$sym" >> "$GITHUB_ENV"
+
+      # The gate first, because a clean report from a job that never
+      # linked the sanitizer looks exactly like a clean report from a
+      # job that did. internal/leakgate leaks a megabyte when it is
+      # asked to, and this step is the one that wants a failure.
+      - name: A leak the job is meant to catch, caught
+        run: |
+          set +e
+          go test -asan -count=1 ./internal/leakgate
+          test $? -ne 0 || { echo "the leak gate did not fire on a leak"; exit 1; }
+        env:
+          ZU_LEAK_GATE: "1"
+
+      - run: go test -asan -count=1 ./... ./zuarrow/...
+
   # The same suite against the engine at its own HEAD, through
   # pkg-config, which is the mode a bisect wants. This is what makes a
   # red job mean the client is wrong about the engine rather than that

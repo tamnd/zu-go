@@ -13,11 +13,13 @@
 package source
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -80,6 +82,54 @@ func Published(root string) ([]string, error) {
 	// run and two runs can be compared to each other.
 	slices.Sort(dirs)
 	return dirs, nil
+}
+
+// ImportPath is what a caller writes to import dir.
+//
+// It is read off the nearest go.mod rather than worked out from where
+// the directory sits, because this repository is seven modules and not
+// one, and a path guessed from the tree would name zuarrow as a
+// subdirectory of the client it sits beside.
+func ImportPath(dir string) (string, error) {
+	for d := dir; ; {
+		b, err := os.ReadFile(filepath.Join(d, "go.mod"))
+		if err == nil {
+			mod := module(string(b))
+			if mod == "" {
+				return "", fmt.Errorf("%s declares no module path", d)
+			}
+			rel, err := filepath.Rel(d, dir)
+			if err != nil {
+				return "", err
+			}
+			if rel == "." {
+				return mod, nil
+			}
+			return path.Join(mod, filepath.ToSlash(rel)), nil
+		}
+		up := filepath.Dir(d)
+		if up == d {
+			return "", fmt.Errorf("no go.mod above %s", dir)
+		}
+		d = up
+	}
+}
+
+// module is the path a go.mod declares. Read by hand rather than
+// through golang.org/x/mod, because one line of a file this package
+// already has open is not worth a dependency in apparatus whose whole
+// point is that it needs nothing installed.
+func module(text string) string {
+	for line := range strings.Lines(text) {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "module")
+		// The space matters: without it a directory called modules
+		// would be read as a module declaration.
+		if !ok || rest == "" || (rest[0] != ' ' && rest[0] != '\t') {
+			continue
+		}
+		return strings.Trim(strings.TrimSpace(rest), `"`)
+	}
+	return ""
 }
 
 // Parse reads one directory's non-test source.

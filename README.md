@@ -330,10 +330,14 @@ Inside this repository:
 | The `database/sql` driver | `zusql` |
 | The Arrow reader, a module of its own | `zuarrow` |
 | The static checks, a module of their own | `zulint` |
+| Every published name and the shape it is published in | `api/surface.txt` |
+| The gates that read this repository rather than run it | `internal` |
 | `zu.h`, the copy this binding was written against | `include` |
 | One static library per platform, one module each | `lib/<goos>-<goarch>` |
 | Which of the three linking modes is in force | `linking.go`, `linking_system.go`, `linking_static.go` |
 | Tagging the libraries, then the client, then `zuarrow` | `scripts/release.sh` |
+
+`api/surface.txt` is generated, in the shape of the `api/go1.N.txt` files the language itself is held to. Regenerate it with `go test ./internal/api -update` and review it like any other file: a name that arrived is a minor release, a name that went or changed shape is a major one or a mistake, and the gate says which of the three a diff is while it is still a diff. It reads source and links nothing, as do the gate that holds every published name to carrying a doc comment and the gate that holds every published signature to the shapes Go writes, so all three answer on a clone with no library staged and no Rust installed.
 
 Seven modules in one `go.work`, which is the client, the five libraries and `zuarrow`, and that is what makes a fresh clone build with nothing installed. `go mod tidy` is the one command it does not cover. The workspace names the six unpublished modules in `replace` directives as well as in `use`, and the comment at the top of `go.work` says why: a `use` directive is enough until something in the workspace imports a module from outside it, and then the build list has to be computed, and computing it means reading the `go.mod` of every requirement by version. `zulint` is an eighth module and a workspace of its own on purpose, so that the `golang.org/x/tools` it needs never reaches anybody who only imports the client.
 

@@ -89,6 +89,19 @@ pkg github.com/tamnd/zu-go, func (db *DB) Path() string
 pkg github.com/tamnd/zu-go, func (e *Error) Error() string
 pkg github.com/tamnd/zu-go, func (e *Error) Is(target error) bool
 pkg github.com/tamnd/zu-go, func (e *Error) Unwrap() error
+pkg github.com/tamnd/zu-go, func (l *Loader) Bools(name string, values []bool) error
+pkg github.com/tamnd/zu-go, func (l *Loader) Close() error
+pkg github.com/tamnd/zu-go, func (l *Loader) Dates(name string, values []Date) error
+pkg github.com/tamnd/zu-go, func (l *Loader) Durations(name string, values []time.Duration) error
+pkg github.com/tamnd/zu-go, func (l *Loader) Edges(from, to []uint32) error
+pkg github.com/tamnd/zu-go, func (l *Loader) Finish(ctx context.Context) error
+pkg github.com/tamnd/zu-go, func (l *Loader) Float64s(name string, values []float64) error
+pkg github.com/tamnd/zu-go, func (l *Loader) Int64s(name string, values []int64) error
+pkg github.com/tamnd/zu-go, func (l *Loader) LocalDateTimes(name string, values []LocalDateTime) error
+pkg github.com/tamnd/zu-go, func (l *Loader) LocalTimes(name string, values []LocalTime) error
+pkg github.com/tamnd/zu-go, func (l *Loader) Strings(name string, values []string) error
+pkg github.com/tamnd/zu-go, func (l *Loader) Table(nodes, edges string, rows uint64) error
+pkg github.com/tamnd/zu-go, func (l *Loader) YearMonths(name string, values []YearMonth) error
 pkg github.com/tamnd/zu-go, func (n Node) String() string
 pkg github.com/tamnd/zu-go, func (p Path) Nodes() []Node
 pkg github.com/tamnd/zu-go, func (p Path) Rels() []Rel
@@ -143,6 +156,7 @@ pkg github.com/tamnd/zu-go, func Create(path string, opts ...Option) (*DB, error
 pkg github.com/tamnd/zu-go, func Iter[T any](rows *Rows) iter.Seq2[T, error]
 pkg github.com/tamnd/zu-go, func Memory(opts ...Option) (*DB, error)
 pkg github.com/tamnd/zu-go, func Named(name string, value any) Arg
+pkg github.com/tamnd/zu-go, func NewLoader(path string) (*Loader, error)
 pkg github.com/tamnd/zu-go, func Open(path string, opts ...Option) (*DB, error)
 pkg github.com/tamnd/zu-go, func Version() string
 pkg github.com/tamnd/zu-go, func WithConfig(cfg Config) Option
@@ -157,6 +171,7 @@ pkg github.com/tamnd/zu-go, type DB struct
 pkg github.com/tamnd/zu-go, type Date struct
 pkg github.com/tamnd/zu-go, type Error struct
 pkg github.com/tamnd/zu-go, type Graph struct
+pkg github.com/tamnd/zu-go, type Loader struct
 pkg github.com/tamnd/zu-go, type LocalDateTime struct
 pkg github.com/tamnd/zu-go, type LocalTime struct
 pkg github.com/tamnd/zu-go, type Node struct

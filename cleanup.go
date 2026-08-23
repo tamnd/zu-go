@@ -44,7 +44,7 @@ func onDrop[T any, H any](obj *T, free func(H), h H) runtime.Cleanup {
 	return runtime.AddCleanup(obj, free, h)
 }
 
-// The four calls that give a handle back, written as functions rather
+// The five calls that give a handle back, written as functions rather
 // than inline so that what a cleanup runs and what Close runs are
 // visibly the same call. The argument is a C pointer, which holds no
 // Go pointer and so can be the value a cleanup keeps.
@@ -56,6 +56,14 @@ func closeConn(h *C.zu_conn) { C.zu_conn_close(h) }
 func closeStmt(h *C.zu_stmt) { C.zu_stmt_close(h) }
 
 func freeResult(h *C.zu_result) { C.zu_result_free(h) }
+
+// A loader is the one handle where the cleanup is not only about
+// memory. A loader dropped before its finish wrote none of its rows,
+// so the graph it was building never arrives, and the file it made at
+// the start is left behind holding an empty database. That is the
+// ABI's behaviour and not something this package can improve on: the
+// alternative is a cleanup that finishes a load nobody asked it to.
+func freeLoader(h *C.zu_loader) { C.zu_loader_free(h) }
 
 // newDB takes ownership of a database handle.
 func newDB(h *C.zu_database) *DB {

@@ -170,11 +170,120 @@ Cross-compiling **to** darwin from anything that is not darwin is the one direct
 - The seven temporal types spelled out rather than flattened into `time.Time`. A date is a `zu.Date`, a time of day is a `zu.LocalTime`, and a year-month duration is a `zu.YearMonth`, because a `time.Time` made out of a time of day is a date somebody invented. The three that name an instant scan into a `time.Time` when you ask for one.
 - A byte string as a `[]byte` and a character string as a `string`, kept apart the way the engine keeps them apart. `X'0041'` is two octets and not the letter A, so it scans into a `[]byte` and not into a `string`, and a `string` scans into a `[]byte` because that is what is underneath it.
 - Transactions with `Begin`, `BeginReadOnly`, `Commit` and `Rollback`, where a rollback deferred beside a commit answers `zu.ErrDone` rather than a failure.
+- A `zu.Loader` that builds a database out of whole columns and an edge list, which is the section after next and the only way a Go program makes a graph with edges in it.
 - A whole result as Arrow record batches for the price of a pointer a column, through `zuarrow`, which is the section below.
 
 Reading a column of integers a row at a time allocates nothing at all, and so does collecting a whole result into a slice of structs: the out-parameters every C accessor writes through are fields of the result rather than locals, and the destinations a struct scan writes into are taken once rather than at every row.
 
 Floor is `go 1.26.6`. CI runs the floor and whatever is current on Linux and macOS, under the race detector.
+
+## Bulk load
+
+The quickstart writes rows with `INSERT`, which needs a table. Nothing in v0 makes one, and neither does anything make a rel table, so a program that wants a graph with edges in it starts from a `zu.Loader` rather than from a statement.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	zu "github.com/tamnd/zu-go"
+)
+
+func main() {
+	ctx := context.Background()
+
+	loader, err := zu.NewLoader("graph.zu1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer loader.Close()
+
+	// The tables first, and how many rows the node table has. The count
+	// is given rather than counted from the first column, so a column
+	// with a value missing is an error and not a shorter table.
+	if err := loader.Table("person", "knows", 3); err != nil {
+		log.Fatal(err)
+	}
+	if err := loader.Int64s("id", []int64{1, 2, 3}); err != nil {
+		log.Fatal(err)
+	}
+	if err := loader.Strings("name", []string{"ada", "grace", "lynn"}); err != nil {
+		log.Fatal(err)
+	}
+	// The row each edge starts at and the row it ends at, in two
+	// columns, because a program that has them that way passes what it
+	// has. They are sorted and deduplicated for you.
+	if err := loader.Edges([]uint32{0, 1}, []uint32{1, 2}); err != nil {
+		log.Fatal(err)
+	}
+	// Nothing has reached the file until here.
+	if err := loader.Finish(ctx); err != nil {
+		log.Fatal(err)
+	}
+
+	db, err := zu.Open("graph.zu1", zu.WithReadOnly())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	conn, err := db.Connect(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	rows, err := conn.Query(ctx, `MATCH (a:person)-[:knows]->(b:person)
+		RETURN a.name AS a, b.name AS b`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	for row := range rows.All() {
+		var a, b string
+		if err := row.Scan(&a, &b); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(a, "knows", b)
+	}
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+```
+ada knows grace
+grace knows lynn
+```
+
+The order is fixed: `NewLoader`, then `Table`, then columns and edges in any order and as many calls as you like, then `Finish`. A column before the table is a `zu.Misuse`, and so is a column whose length disagrees with the row count, reported at the call that passed it rather than at the finish, so the message names the column while you still know which one you were building.
+
+A loader is columnar for the same reason a result is, and the names say so: `Loader.Int64s` against `Rows.Int64s`, `Loader.Float64s` against `Rows.Float64s`. A column read out of one database goes into another unchanged, and that includes the temporals, which are five typed methods taking the same `zu.Date`, `zu.LocalTime`, `zu.LocalDateTime`, `zu.YearMonth` and `time.Duration` a result hands back.
+
+There is no method for a zoned time or a zoned datetime, and that is deliberate. A stored column has nowhere to keep the offset that makes those two what they are, so they are values a query can produce and not values a column can hold. The C ABI refuses them at run time; here they are absent from the type system instead, because a program with one of them has to say what it means to do with the offset and dropping it quietly is the one thing that must not happen.
+
+Three things worth knowing before you build a pipeline on it.
+
+`Finish` takes a context and checks it before the write rather than during it, because the ABI has no interrupt for a loader. A load of a hundred million rows cannot be cancelled halfway, and answering the caller before the file was written would be worse than making them wait. What the context buys is one that was already cancelled costing nothing.
+
+A loader that never reaches its `Finish` leaves a file at the path, and that file is not empty. It is a whole database with the node table already in it and no rows in that table. So an interrupted load leaves a path that no second load may start on, since `NewLoader` refuses one that exists, and that opens perfectly well as a graph with nothing in it. Load into a temporary path and rename it once `Finish` returns, which is the shape that does not have the problem at all.
+
+Every array but two crosses without a copy: `[]int64`, `[]float64`, `[]uint32` and `[]time.Duration` are passed to the engine as the backing array you handed over, and the engine takes its own copy before the call returns, so you may reuse the slice immediately. `[]bool` is rebuilt because the ABI carries a boolean as an `int32`. `[]string` is copied into memory this package owns, one allocation for all the bytes rather than one per string, because an array of pointers into Go strings is not something a Go program may hand to C at all.
+
+One core of a shared AMD EPYC, a hundred thousand rows a column. The machine is worth naming because it is several times slower than the M4 the Arrow numbers below were taken on, and what matters here is the ratio rather than the absolute.
+
+| What | Per column | Per row |
+|---|---|---|
+| `Loader.Int64s` | lost in the noise of the load around it | |
+| `Loader.Strings`, the copy this package does | 26 ms | 260 ns |
+| `Loader.Strings`, all in | 235 ms | 2.4 µs |
+
+A column of integers costs nothing measurable above making the database and naming the table, which is what passing a pointer and a length is supposed to look like. A column of strings costs about two microseconds a row inside the engine, and it costs the same whether the strings are fifteen bytes or empty, so it is per string and not per byte. That is the engine's to improve and not this binding's, and it is written down here rather than left for somebody to find at a hundred million rows.
 
 ## Arrow
 

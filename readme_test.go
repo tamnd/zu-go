@@ -167,8 +167,8 @@ func run(t *testing.T, program string) (string, string) {
 
 func TestTheReadmePrintsProgramsAndNotOnlyFragments(t *testing.T) {
 	whole, all := len(programs(t)), len(blocks(t, "go"))
-	if whole != 2 {
-		t.Errorf("the README has %d whole programs and had 2", whole)
+	if whole != 3 {
+		t.Errorf("the README has %d whole programs and had 3", whole)
 	}
 	if all <= whole {
 		t.Errorf("the README has %d go blocks and none of them is a fragment", all)
@@ -185,6 +185,19 @@ func TestTheQuickstartRunsAsPrinted(t *testing.T) {
 	// database the page says it writes is there when it finishes.
 	if _, err := os.Stat(filepath.Join(dir, "social.zu1")); err != nil {
 		t.Errorf("the quickstart wrote no social.zu1 beside the reader: %v", err)
+	}
+}
+
+func TestTheBulkLoadProgramRunsAsPrinted(t *testing.T) {
+	out, dir := run(t, programWith(t, "zu.NewLoader"))
+	want := "ada knows grace\ngrace knows lynn\n"
+	if out != want {
+		t.Errorf("the bulk load program printed %q and the page says it prints %q", out, want)
+	}
+	// The page says the load writes graph.zu1 beside the reader, and
+	// the whole point of Finish is that it is there afterwards.
+	if _, err := os.Stat(filepath.Join(dir, "graph.zu1")); err != nil {
+		t.Errorf("the load wrote no graph.zu1 beside the reader: %v", err)
 	}
 }
 

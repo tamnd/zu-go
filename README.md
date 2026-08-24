@@ -409,6 +409,25 @@ zulint ./...
 
 It reports a columnar view used after the result it borrows from was closed or handed to Arrow, a loop over a result that never reads `rows.Err()`, and a `*zu.Conn` that two goroutines can reach. All three compile, pass review, and are a use-after-free, a swallowed failure and a refused query at run time. It reads source: no engine, no C toolchain, no database. This client runs it on itself in CI, and the one test that provokes the third on purpose says so with a `//zulint:ignore` comment.
 
+## Conformance
+
+Every zu client answers the same corpus. The cases live in [tamnd/zu](https://github.com/tamnd/zu) under `conformance/cases`, twenty five files of them, and each one is a statement written in GQL and the rows or the GQLSTATUS it owes. Nothing in a case names a client's own API, which is what makes one corpus serve five languages: a report from this runner is diffed line for line against the Rust, Python, Node and Java runners, and a line that differs is one client disagreeing with the other four about what the engine said.
+
+The runner is in [`corpus`](corpus), a module of its own so that nobody importing this client to query a graph carries a YAML reader and a value encoding along with it. It depends on this client and on nothing else.
+
+```
+git clone https://github.com/tamnd/zu ../zu
+ZU_CASES=../zu/conformance/cases go test ./corpus/...
+```
+
+Without `ZU_CASES` the tests that need the corpus skip and the rest still run, so a clone of this repository alone is still green. There is a command beside the package for a run outside `go test`:
+
+```
+go run ./corpus/cmd/corpus ../zu/conformance/cases
+```
+
+Check the cases out at the revision `lib/<goos>-<goarch>/REVISION` names rather than at the engine's HEAD. The corpus is the contract and the engine catches up to it, so a corpus ahead of the library reports the engine catching up to its own cases as this client failing. CI runs it both ways for that reason: against the shipped archive at the revision it was built from, where every case is expected to pass, and against the engine at HEAD, where a case the engine has not answered yet is reported as unsupported and is not a failure.
+
 ## Not here yet
 
 The pieces of this client that milestone DX4 lists and this release does not have: the `purego` build over `dlopen` for `CGO_ENABLED=0`.
@@ -441,6 +460,7 @@ Inside this repository:
 | The `database/sql` driver | `zusql` |
 | The Arrow reader, a module of its own | `zuarrow` |
 | The static checks, a module of their own | `zulint` |
+| The cross client corpus runner, a module of its own | `corpus` |
 | Every published name and the shape it is published in | `api/surface.txt` |
 | The gates that read this repository rather than run it | `internal` |
 | `zu.h`, the copy this binding was written against | `include` |
@@ -450,7 +470,7 @@ Inside this repository:
 
 `api/surface.txt` is generated, in the shape of the `api/go1.N.txt` files the language itself is held to. Regenerate it with `go test ./internal/api -update` and review it like any other file: a name that arrived is a minor release, a name that went or changed shape is a major one or a mistake, and the gate says which of the three a diff is while it is still a diff. It reads source and links nothing, as do the gate that holds every published name to carrying a doc comment and the gate that holds every published signature to the shapes Go writes, so all three answer on a clone with no library staged and no Rust installed.
 
-Seven modules in one `go.work`, which is the client, the five libraries and `zuarrow`, and that is what makes a fresh clone build with nothing installed. `go mod tidy` is the one command it does not cover. The workspace names the six unpublished modules in `replace` directives as well as in `use`, and the comment at the top of `go.work` says why: a `use` directive is enough until something in the workspace imports a module from outside it, and then the build list has to be computed, and computing it means reading the `go.mod` of every requirement by version. `zulint` is an eighth module and a workspace of its own on purpose, so that the `golang.org/x/tools` it needs never reaches anybody who only imports the client.
+Eight modules in one `go.work`, which is the client, the five libraries, `zuarrow` and `corpus`, and that is what makes a fresh clone build with nothing installed. `go mod tidy` is the one command it does not cover. The workspace names the six unpublished modules in `replace` directives as well as in `use`, and the comment at the top of `go.work` says why: a `use` directive is enough until something in the workspace imports a module from outside it, and then the build list has to be computed, and computing it means reading the `go.mod` of every requirement by version. `zulint` is a ninth module and a workspace of its own on purpose, so that the `golang.org/x/tools` it needs never reaches anybody who only imports the client.
 
 ## License
 

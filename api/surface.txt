@@ -192,6 +192,114 @@ pkg github.com/tamnd/zu-go, type YearMonth struct
 pkg github.com/tamnd/zu-go, type ZonedDateTime struct
 pkg github.com/tamnd/zu-go, type ZonedTime struct
 pkg github.com/tamnd/zu-go, var ErrDone
+pkg github.com/tamnd/zu-go/corpus, const Failed Outcome = iota
+pkg github.com/tamnd/zu-go/corpus, const KindEmpty Kind = iota
+pkg github.com/tamnd/zu-go/corpus, const KindMap Kind = iota
+pkg github.com/tamnd/zu-go/corpus, const KindScalar Kind = iota
+pkg github.com/tamnd/zu-go/corpus, const KindSeq Kind = iota
+pkg github.com/tamnd/zu-go/corpus, const Main = "main"
+pkg github.com/tamnd/zu-go/corpus, const Passed Outcome = iota
+pkg github.com/tamnd/zu-go/corpus, const Schema = 4
+pkg github.com/tamnd/zu-go/corpus, const TheResult = "the result"
+pkg github.com/tamnd/zu-go/corpus, const Unsupported Outcome = iota
+pkg github.com/tamnd/zu-go/corpus, field ArrowError.Message string
+pkg github.com/tamnd/zu-go/corpus, field Case.Arrow *Export
+pkg github.com/tamnd/zu-go/corpus, field Case.Columns []string
+pkg github.com/tamnd/zu-go/corpus, field Case.Doc string
+pkg github.com/tamnd/zu-go/corpus, field Case.HasColumns bool
+pkg github.com/tamnd/zu-go/corpus, field Case.Line int
+pkg github.com/tamnd/zu-go/corpus, field Case.Name string
+pkg github.com/tamnd/zu-go/corpus, field Case.On string
+pkg github.com/tamnd/zu-go/corpus, field Case.Params []Param
+pkg github.com/tamnd/zu-go/corpus, field Case.Query string
+pkg github.com/tamnd/zu-go/corpus, field Case.Raises string
+pkg github.com/tamnd/zu-go/corpus, field Case.Rows [][]any
+pkg github.com/tamnd/zu-go/corpus, field Case.Setup []Step
+pkg github.com/tamnd/zu-go/corpus, field Column.Name string
+pkg github.com/tamnd/zu-go/corpus, field Column.Type string
+pkg github.com/tamnd/zu-go/corpus, field Column.Values []any
+pkg github.com/tamnd/zu-go/corpus, field CorpusError.Message string
+pkg github.com/tamnd/zu-go/corpus, field EdgeAt.Dst uint64
+pkg github.com/tamnd/zu-go/corpus, field EdgeAt.Src uint64
+pkg github.com/tamnd/zu-go/corpus, field EdgeAt.Table string
+pkg github.com/tamnd/zu-go/corpus, field Export.Fields []Field
+pkg github.com/tamnd/zu-go/corpus, field Export.Refused bool
+pkg github.com/tamnd/zu-go/corpus, field Field.Children []Field
+pkg github.com/tamnd/zu-go/corpus, field Field.Format string
+pkg github.com/tamnd/zu-go/corpus, field Field.Name string
+pkg github.com/tamnd/zu-go/corpus, field Load.Columns []Column
+pkg github.com/tamnd/zu-go/corpus, field Load.Count int
+pkg github.com/tamnd/zu-go/corpus, field Load.Edges string
+pkg github.com/tamnd/zu-go/corpus, field Load.Nodes string
+pkg github.com/tamnd/zu-go/corpus, field Load.Pairs [][2]int
+pkg github.com/tamnd/zu-go/corpus, field NodeAt.Offset uint64
+pkg github.com/tamnd/zu-go/corpus, field NodeAt.Table string
+pkg github.com/tamnd/zu-go/corpus, field Pair.Key string
+pkg github.com/tamnd/zu-go/corpus, field Pair.Value Node
+pkg github.com/tamnd/zu-go/corpus, field Param.Name string
+pkg github.com/tamnd/zu-go/corpus, field Param.Value any
+pkg github.com/tamnd/zu-go/corpus, field Ran.Case string
+pkg github.com/tamnd/zu-go/corpus, field Ran.Detail string
+pkg github.com/tamnd/zu-go/corpus, field Ran.Line int
+pkg github.com/tamnd/zu-go/corpus, field Ran.Outcome Outcome
+pkg github.com/tamnd/zu-go/corpus, field Ran.Suite string
+pkg github.com/tamnd/zu-go/corpus, field Report.Ran []Ran
+pkg github.com/tamnd/zu-go/corpus, field Step.On string
+pkg github.com/tamnd/zu-go/corpus, field Step.Query string
+pkg github.com/tamnd/zu-go/corpus, field Suite.Cases []Case
+pkg github.com/tamnd/zu-go/corpus, field Suite.Doc string
+pkg github.com/tamnd/zu-go/corpus, field Suite.Load *Load
+pkg github.com/tamnd/zu-go/corpus, field Suite.Name string
+pkg github.com/tamnd/zu-go/corpus, field Walk.Elements []any
+pkg github.com/tamnd/zu-go/corpus, func (e *ArrowError) Error() string
+pkg github.com/tamnd/zu-go/corpus, func (e *CorpusError) Error() string
+pkg github.com/tamnd/zu-go/corpus, func (n Node) Get(key string) *Node
+pkg github.com/tamnd/zu-go/corpus, func (n Node) Kind() Kind
+pkg github.com/tamnd/zu-go/corpus, func (n Node) Line() int
+pkg github.com/tamnd/zu-go/corpus, func (n Node) Map() ([]Pair, bool)
+pkg github.com/tamnd/zu-go/corpus, func (n Node) Scalar() (text string, quoted bool, ok bool)
+pkg github.com/tamnd/zu-go/corpus, func (n Node) Seq() ([]Node, bool)
+pkg github.com/tamnd/zu-go/corpus, func (n Node) SeqOrEmpty() ([]Node, bool)
+pkg github.com/tamnd/zu-go/corpus, func (n Node) Str() (string, bool)
+pkg github.com/tamnd/zu-go/corpus, func (n Node) Unknown(known ...string) []string
+pkg github.com/tamnd/zu-go/corpus, func (n Node) What() string
+pkg github.com/tamnd/zu-go/corpus, func (r Ran) String() string
+pkg github.com/tamnd/zu-go/corpus, func (r Report) Count(outcome Outcome) int
+pkg github.com/tamnd/zu-go/corpus, func (r Report) Summary() string
+pkg github.com/tamnd/zu-go/corpus, func Cell(value any, named func(uint32) string) any
+pkg github.com/tamnd/zu-go/corpus, func Decode(node Node) (any, error)
+pkg github.com/tamnd/zu-go/corpus, func Exported(rows *zu.Rows) ([]Field, int64, error)
+pkg github.com/tamnd/zu-go/corpus, func Form(ty string) (quoted bool, ok bool)
+pkg github.com/tamnd/zu-go/corpus, func Parse(text string) (Node, error)
+pkg github.com/tamnd/zu-go/corpus, func ParseExport(node Node) (*Export, error)
+pkg github.com/tamnd/zu-go/corpus, func Payload(ty string, value Node) (any, error)
+pkg github.com/tamnd/zu-go/corpus, func Quote(text string) string
+pkg github.com/tamnd/zu-go/corpus, func Read(text string) (Suite, error)
+pkg github.com/tamnd/zu-go/corpus, func ReadDir(directory string) ([]Suite, error)
+pkg github.com/tamnd/zu-go/corpus, func Run(ctx context.Context, suites []Suite, directory string) Report
+pkg github.com/tamnd/zu-go/corpus, func Same(want, got any) bool
+pkg github.com/tamnd/zu-go/corpus, func SchemaSays(got, want []Field) string
+pkg github.com/tamnd/zu-go/corpus, func Show(value any) string
+pkg github.com/tamnd/zu-go/corpus, func Typed(node Node) (any, error)
+pkg github.com/tamnd/zu-go/corpus, type ArrowError struct
+pkg github.com/tamnd/zu-go/corpus, type Case struct
+pkg github.com/tamnd/zu-go/corpus, type Column struct
+pkg github.com/tamnd/zu-go/corpus, type CorpusError struct
+pkg github.com/tamnd/zu-go/corpus, type EdgeAt struct
+pkg github.com/tamnd/zu-go/corpus, type Export struct
+pkg github.com/tamnd/zu-go/corpus, type Field struct
+pkg github.com/tamnd/zu-go/corpus, type Kind int
+pkg github.com/tamnd/zu-go/corpus, type Load struct
+pkg github.com/tamnd/zu-go/corpus, type Node struct
+pkg github.com/tamnd/zu-go/corpus, type NodeAt struct
+pkg github.com/tamnd/zu-go/corpus, type Outcome int
+pkg github.com/tamnd/zu-go/corpus, type Pair struct
+pkg github.com/tamnd/zu-go/corpus, type Param struct
+pkg github.com/tamnd/zu-go/corpus, type Ran struct
+pkg github.com/tamnd/zu-go/corpus, type Report struct
+pkg github.com/tamnd/zu-go/corpus, type Step struct
+pkg github.com/tamnd/zu-go/corpus, type Suite struct
+pkg github.com/tamnd/zu-go/corpus, type Walk struct
 pkg github.com/tamnd/zu-go/zuarrow, func Query(ctx context.Context, conn *zu.Conn, q string, args ...zu.Arg) (array.RecordReader, error)
 pkg github.com/tamnd/zu-go/zuarrow, func Reader(rows *zu.Rows) (array.RecordReader, error)
 pkg github.com/tamnd/zu-go/zuarrow, func ReaderBatched(rows *zu.Rows, rowsPerBatch int) (array.RecordReader, error)

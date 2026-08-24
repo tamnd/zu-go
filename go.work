@@ -1,9 +1,9 @@
-// The client, the five libraries it links against and the Arrow reader
-// beside it are one repository and seven modules. This workspace is
-// what makes a clone build without them being published first, and it
-// is also what CI uses, because a library built by the workflow in this
-// repository is the one that has to be tested rather than whatever the
-// proxy already has.
+// The client, the five libraries it links against, the Arrow reader
+// beside it and the corpus runner are one repository and eight modules.
+// This workspace is what makes a clone build without them being
+// published first, and it is also what CI uses, because a library built
+// by the workflow in this repository is the one that has to be tested
+// rather than whatever the proxy already has.
 //
 // A workspace in a dependency is ignored, so this changes nothing for
 // anybody who has installed the client. It goes away when the libraries
@@ -30,6 +30,7 @@ go 1.26.6
 
 use (
 	.
+	./corpus
 	./lib/darwin-amd64
 	./lib/darwin-arm64
 	./lib/linux-amd64

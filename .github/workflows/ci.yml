@@ -93,7 +93,7 @@ jobs:
           fi
 
       - if: steps.lib.outputs.there == 'yes'
-        run: go vet ./... ./zuarrow/...
+        run: go vet ./... ./zuarrow/... ./corpus/...
 
       # The client held to its own analyzers, which is the only honest
       # way to ship them. The one place it provokes a mistake on
@@ -103,22 +103,60 @@ jobs:
         run: |
           set -eu
           (cd zulint && go build -o "$RUNNER_TEMP/zulint" ./cmd/zulint)
-          "$RUNNER_TEMP/zulint" ./... ./zuarrow/...
+          "$RUNNER_TEMP/zulint" ./... ./zuarrow/... ./corpus/...
 
       - if: steps.lib.outputs.there == 'yes'
-        run: go test -count=1 ./... ./zuarrow/...
+        run: go test -count=1 ./... ./zuarrow/... ./corpus/...
 
       # The concurrency rules here are the whole reason the connection
       # holds a lock, and the interrupt is a second goroutine reaching
       # into a connection another one is inside of. Neither is worth
       # anything unchecked.
       - if: steps.lib.outputs.there == 'yes'
-        run: go test -race -count=1 ./... ./zuarrow/...
+        run: go test -race -count=1 ./... ./zuarrow/... ./corpus/...
 
       # Not for the numbers, which mean nothing on a shared runner, but
       # because a benchmark is code that only this runs.
       - if: steps.lib.outputs.there == 'yes'
-        run: go test -run '^$' -bench . -benchtime 10x ./... ./zuarrow/...
+        run: go test -run '^$' -bench . -benchtime 10x ./... ./zuarrow/... ./corpus/...
+
+  # The cross client corpus, run against the archive this repository
+  # ships. Every client answers the same fourteen hundred cases and a
+  # report is diffed line for line against the other four, so this is
+  # the job that says this client agrees with them rather than only
+  # with itself.
+  #
+  # The cases are checked out at the revision the archive was built
+  # from, which is what lib/<goos>-<goarch>/REVISION holds, and not at
+  # the engine's HEAD. A corpus ahead of the library reports the engine
+  # catching up to its own cases as this client failing, which is a red
+  # job that says nothing about this repository and cannot be fixed
+  # here. The engine job below is the one that runs the pair at HEAD,
+  # and that is where a case the engine has not caught up to belongs.
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: The engine revision this archive was built from
+        id: pin
+        run: echo "rev=$(cat lib/linux-amd64/REVISION)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        with:
+          repository: tamnd/zu
+          ref: ${{ steps.pin.outputs.rev }}
+          path: engine
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.6"
+
+      # Verbose, because the run logs every case the engine has not
+      # caught up to and a release branch is read for exactly that.
+      - run: go test -count=1 -v ./corpus/...
+        env:
+          ZU_CASES: ${{ github.workspace }}/engine/conformance/cases
 
   # The same suite with the allocator watched, which is the scorecard's
   # leaks item and the job that answers the question a binding cannot
@@ -181,7 +219,7 @@ jobs:
         env:
           ZU_LEAK_GATE: "1"
 
-      - run: go test -asan -count=1 ./... ./zuarrow/...
+      - run: go test -asan -count=1 ./... ./zuarrow/... ./corpus/...
 
   # The same suite against the engine at its own HEAD, through
   # pkg-config, which is the mode a bisect wants. This is what makes a
@@ -249,11 +287,20 @@ jobs:
       # The ABI revision the header declares is checked by the test
       # suite itself rather than by a step here, so that it fails the
       # same way on a laptop.
-      - run: go vet -tags zu_system ./... ./zuarrow/...
+      - run: go vet -tags zu_system ./... ./zuarrow/... ./corpus/...
 
-      - run: go test -tags zu_system -count=1 ./... ./zuarrow/...
+      - run: go test -tags zu_system -count=1 ./... ./zuarrow/... ./corpus/...
 
-      - run: go test -tags zu_system -race -count=1 ./... ./zuarrow/...
+      - run: go test -tags zu_system -race -count=1 ./... ./zuarrow/... ./corpus/...
+
+      # The corpus and the engine at the same HEAD, which is the pair a
+      # bisect wants and the one that says whether a case the engine has
+      # just written passes here. A case ahead of the engine is
+      # unsupported and is not a failure, so this stays green through
+      # the days between a case landing and the engine answering it.
+      - run: go test -tags zu_system -count=1 -v ./corpus/...
+        env:
+          ZU_CASES: ${{ github.workspace }}/engine/conformance/cases
 
       # The third mode, which is somebody's own archive named in
       # CGO_LDFLAGS. It is the escape hatch, so it is checked that it
@@ -263,4 +310,4 @@ jobs:
           set -eu
           export CGO_LDFLAGS="$GITHUB_WORKSPACE/dist/libzu/lib/libzu.a $(
             sed -n 's/^Libs.private: //p' "$GITHUB_WORKSPACE/dist/libzu/lib/pkgconfig/libzu.pc")"
-          go test -tags zu_static -count=1 ./... ./zuarrow/...
+          go test -tags zu_static -count=1 ./... ./zuarrow/... ./corpus/...

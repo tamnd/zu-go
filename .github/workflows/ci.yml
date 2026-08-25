@@ -133,6 +133,44 @@ jobs:
   # job that says nothing about this repository and cannot be fixed
   # here. The engine job below is the one that runs the pair at HEAD,
   # and that is where a case the engine has not caught up to belongs.
+  # The header that ships here against the engine revision the archives
+  # that ship beside it were built from, which is the pair that has to
+  # agree: a header describing a struct that moved is a compile that
+  # succeeds and a read that does not. Against that revision and not
+  # against the engine's HEAD, because HEAD is a branch this repository
+  # does not control and a check it cannot pass on demand is a check
+  # that only ever says the calendar moved.
+  #
+  # Nothing is built, so this is a checkout of one file and a diff, and
+  # it is the fastest job here.
+  header:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: The engine revision these archives were built from
+        id: pin
+        run: |
+          set -eu
+          rev=$(cat lib/linux-amd64/REVISION)
+          # Five archives and one revision. Five that disagree is a
+          # libraries run that finished half way, and the header can
+          # only be the header of one of them.
+          for f in lib/*/REVISION; do
+            test "$(cat "$f")" = "$rev" || { echo "$f is not $rev"; exit 1; }
+          done
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        with:
+          repository: tamnd/zu
+          ref: ${{ steps.pin.outputs.rev }}
+          path: engine
+          sparse-checkout: crates/zu-capi/include/zu.h
+          sparse-checkout-cone-mode: false
+
+      - run: diff -u engine/crates/zu-capi/include/zu.h include/zu.h
+
   corpus:
     runs-on: ubuntu-latest
     steps:
@@ -247,12 +285,21 @@ jobs:
         with:
           workspaces: engine
 
-      # The header that ships here is the one this binding was written
-      # against, and it is checked against the engine rather than
-      # trusted, because a stale copy would compile and then read a
-      # struct that moved.
-      - name: The vendored header is the engine's header
-        run: diff -u engine/crates/zu-capi/include/zu.h include/zu.h
+      # Whether the vendored header still matches is checked in the
+      # header job and not here. This is the at-HEAD job, so the engine
+      # is allowed to be ahead of what this repository vendors, the same
+      # way a corpus case ahead of the engine is unsupported here rather
+      # than failed. Diffing hard against a moving branch turns every
+      # commit that touches zu.h in the engine into a red pull request
+      # here that the pull request cannot fix, which happened, so what
+      # is left is the notice that a refresh is waiting.
+      - name: Whether the engine's header has moved past the vendored one
+        run: |
+          if diff -u include/zu.h engine/crates/zu-capi/include/zu.h; then
+            echo "the vendored header is the engine's current header"
+          else
+            echo "::notice::the engine header has moved past the vendored one, so the pin has a refresh waiting"
+          fi
 
       - name: Build libzu
         working-directory: engine

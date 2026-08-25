@@ -44,6 +44,7 @@ package corpus
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
 	"strconv"
 	"strings"
@@ -577,6 +578,18 @@ func Same(want, got any) bool {
 	case []byte:
 		g, ok := got.([]byte)
 		return ok && string(w) == string(g)
+	case zu.Decimal:
+		// The scale as well as the number. Two decimals of one number
+		// at two scales are one value to the engine and print
+		// differently, and what a case asserts is what a reader would
+		// see. Compared through the unscaled integers rather than with
+		// ==, since the struct holds a pointer and two of those are
+		// never the same one.
+		g, ok := got.(zu.Decimal)
+		if !ok || w.Scale != g.Scale {
+			return false
+		}
+		return unscaled(w).Cmp(unscaled(g)) == 0
 	}
 	if _, ok := got.([]any); ok {
 		return false
@@ -588,6 +601,15 @@ func Same(want, got any) bool {
 		return false
 	}
 	return want == got
+}
+
+// unscaled is a decimal's digits as an integer, with the nil a zero
+// value carries read as zero rather than dereferenced.
+func unscaled(d zu.Decimal) *big.Int {
+	if d.Unscaled == nil {
+		return new(big.Int)
+	}
+	return d.Unscaled
 }
 
 func sameAll(want, got []any) bool {
@@ -622,6 +644,14 @@ func Show(value any) string {
 		return "STRING " + Quote(v)
 	case []byte:
 		return `BYTES "` + hexits(v) + `"`
+	case zu.Decimal:
+		// A decimal is a value a statement can hand back today even
+		// though DECIMAL is still a reserved name a case may not write,
+		// since CAST reaches one and no case declares one. That makes
+		// this the got side of a report and never the want side, and a
+		// report that could not print what it got would be the least
+		// useful moment to find out.
+		return `DECIMAL "` + v.String() + `"`
 	case zu.Date:
 		return `DATE "` + showDate(v) + `"`
 	case zu.LocalTime:

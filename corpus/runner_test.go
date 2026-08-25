@@ -172,8 +172,14 @@ func TestEveryWayACaseCanFailIsReportedInFull(t *testing.T) {
 // A case the engine has not caught up to is unsupported and not a
 // failure, which is what lets the corpus be the contract and the engine
 // catch up to it. The two classes that say so are 42 and 0A.
+//
+// The statement has to be one the engine really has not reached, and a
+// test like this is a canary by construction: the day CREATE lands, this
+// stops testing what it says it tests and has to pick another spelling.
+// It was SELECT before, which the engine now parses.
 func TestACaseAheadOfTheEngineIsUnsupportedAndNotAFailure(t *testing.T) {
-	got := only(t, "  - name: one\n    doc: d\n    query: SELECT 1\n    columns:\n      - n\n"+
+	got := only(t, "  - name: one\n    doc: d\n    query: CREATE NODE TABLE person(uid INT64)\n"+
+		"    columns:\n      - n\n"+
 		"    rows:\n")
 	if got.Outcome != Unsupported {
 		t.Errorf("came to %s: %s", got.Outcome.mark(), got.Detail)

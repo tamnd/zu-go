@@ -149,7 +149,7 @@ func TestACellReadAsSomethingItIsNotNamesTheColumn(t *testing.T) {
 
 func TestANullNeedsSomewhereThatHoldsOne(t *testing.T) {
 	conn := memory(t)
-	rows := query(t, conn, "RETURN null AS nothing")
+	rows := query(t, conn, "RETURN null AS missing")
 	if !rows.Next() {
 		t.Fatal("no row")
 	}

@@ -48,12 +48,12 @@ func Example_named() {
 	}
 	defer db.Close()
 
-	var sum int64
-	err = db.QueryRow("RETURN $a + $b AS sum", sql.Named("a", 20), sql.Named("b", 22)).Scan(&sum)
+	var total int64
+	err = db.QueryRow("RETURN $a + $b AS total", sql.Named("a", 20), sql.Named("b", 22)).Scan(&total)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(sum)
+	fmt.Println(total)
 
 	_, err = db.Query("RETURN $a AS a", 1)
 	fmt.Println(err != nil)

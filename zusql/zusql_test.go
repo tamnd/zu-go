@@ -102,7 +102,7 @@ func TestAResultWithNoRowsEndsTheLoopAndSaysNoRows(t *testing.T) {
 
 func TestAnArgumentIsBoundByName(t *testing.T) {
 	db := open(t)
-	got := one(t, db, "RETURN $a + $b AS sum", sql.Named("a", 20), sql.Named("b", 22))
+	got := one(t, db, "RETURN $a + $b AS total", sql.Named("a", 20), sql.Named("b", 22))
 	if got != 42 {
 		t.Errorf("20 + 22 came back as %d", got)
 	}

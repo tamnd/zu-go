@@ -113,20 +113,20 @@ func ExampleNamed() {
 
 	// Parameters are named rather than positional, so there is no order
 	// to get wrong. The dollar may be written or left off.
-	rows, err := conn.Query(ctx, `RETURN $a + $b AS sum`,
+	rows, err := conn.Query(ctx, `RETURN $a + $b AS total`,
 		zu.Named("a", 40), zu.Named("b", 2))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer rows.Close()
 
-	var sum int64
+	var total int64
 	if rows.Next() {
-		if err := rows.Scan(&sum); err != nil {
+		if err := rows.Scan(&total); err != nil {
 			log.Fatal(err)
 		}
 	}
-	fmt.Println(sum)
+	fmt.Println(total)
 	// Output: 42
 }
 

@@ -124,14 +124,14 @@ func scan(sc *scratch, v *C.zu_value, dest any, col string) error {
 		return nil
 
 	case *float64:
-		f, err := decimal(sc, v, t, col, dest)
+		f, err := approximate(sc, v, t, col, dest)
 		if err != nil {
 			return err
 		}
 		*d = f
 		return nil
 	case *float32:
-		f, err := decimal(sc, v, t, col, dest)
+		f, err := approximate(sc, v, t, col, dest)
 		if err != nil {
 			return err
 		}
@@ -174,6 +174,17 @@ func scan(sc *scratch, v *C.zu_value, dest any, col string) error {
 		default:
 			return mismatch(col, t, dest)
 		}
+
+	case *Decimal:
+		if t != TypeDecimal {
+			return mismatch(col, t, dest)
+		}
+		d2, err := exact(sc, v)
+		if err != nil {
+			return err
+		}
+		*d = d2
+		return nil
 
 	case *Node:
 		if t != TypeNode {
@@ -361,7 +372,7 @@ func scanReflect(sc *scratch, v *C.zu_value, t Type, dest any, col string) error
 		el.SetUint(uint64(n))
 		return nil
 	case reflect.Float32, reflect.Float64:
-		f, err := decimal(sc, v, t, col, dest)
+		f, err := approximate(sc, v, t, col, dest)
 		if err != nil {
 			return err
 		}
@@ -421,12 +432,18 @@ func integer(sc *scratch, v *C.zu_value, t Type, col string, dest any) (int64, e
 	return int64(sc.i64), nil
 }
 
-// decimal reads a float cell, and an integer one too. An integer
-// widens here and nowhere else: a caller who asked for a float has
-// said which of the two they want, and refusing the widening would
-// mean writing two scans for a column of averages that happens to be
-// whole in the test data.
-func decimal(sc *scratch, v *C.zu_value, t Type, col string, dest any) (float64, error) {
+// approximate reads a float cell, and an integer or a decimal one too.
+// The two exact types widen here and nowhere else: a caller who asked
+// for a float has said which of the two they want, and refusing the
+// widening would mean writing two scans for a column of averages that
+// happens to be whole in the test data.
+//
+// The widening is where the exactness stops, and that is the caller's
+// call to make rather than this client's to make for them. A caller who
+// does not want it scans into a [Decimal], which is the type the cell
+// actually holds, and [Decimal.Float64] is the same conversion with an
+// answer about whether it survived.
+func approximate(sc *scratch, v *C.zu_value, t Type, col string, dest any) (float64, error) {
 	switch t {
 	case TypeFloat:
 		if err := fail(C.zu_value_f64(v, &sc.f64), nil); err != nil {
@@ -438,6 +455,13 @@ func decimal(sc *scratch, v *C.zu_value, t Type, col string, dest any) (float64,
 			return 0, err
 		}
 		return float64(sc.i64), nil
+	case TypeDecimal:
+		d, err := exact(sc, v)
+		if err != nil {
+			return 0, err
+		}
+		f, _ := d.Float64()
+		return f, nil
 	default:
 		return 0, mismatch(col, t, dest)
 	}

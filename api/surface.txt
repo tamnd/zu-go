@@ -24,6 +24,7 @@ pkg github.com/tamnd/zu-go, const SeverityWarning Severity = C.ZU_SEVERITY_WARNI
 pkg github.com/tamnd/zu-go, const TypeBindingTable Type = C.ZU_TYPE_BINDING_TABLE
 pkg github.com/tamnd/zu-go, const TypeBool Type = C.ZU_TYPE_BOOL
 pkg github.com/tamnd/zu-go, const TypeBytes Type = C.ZU_TYPE_BYTES
+pkg github.com/tamnd/zu-go, const TypeDecimal Type = C.ZU_TYPE_DECIMAL
 pkg github.com/tamnd/zu-go, const TypeFloat Type = C.ZU_TYPE_FLOAT
 pkg github.com/tamnd/zu-go, const TypeGraph Type = C.ZU_TYPE_GRAPH
 pkg github.com/tamnd/zu-go, const TypeInt Type = C.ZU_TYPE_INT
@@ -42,6 +43,8 @@ pkg github.com/tamnd/zu-go, field Config.MemoryLimit uint64
 pkg github.com/tamnd/zu-go, field Config.ReadOnly bool
 pkg github.com/tamnd/zu-go, field Config.Threads int
 pkg github.com/tamnd/zu-go, field Date.Days int32
+pkg github.com/tamnd/zu-go, field Decimal.Scale int32
+pkg github.com/tamnd/zu-go, field Decimal.Unscaled *big.Int
 pkg github.com/tamnd/zu-go, field Error.Code string
 pkg github.com/tamnd/zu-go, field Error.DocURL string
 pkg github.com/tamnd/zu-go, field Error.Excerpt string
@@ -85,6 +88,8 @@ pkg github.com/tamnd/zu-go, func (c *Conn) RowsRead() (uint64, error)
 pkg github.com/tamnd/zu-go, func (c *Conn) TableName(table uint32) (string, error)
 pkg github.com/tamnd/zu-go, func (d Date) String() string
 pkg github.com/tamnd/zu-go, func (d Date) Time() time.Time
+pkg github.com/tamnd/zu-go, func (d Decimal) Float64() (float64, bool)
+pkg github.com/tamnd/zu-go, func (d Decimal) String() string
 pkg github.com/tamnd/zu-go, func (d YearMonth) String() string
 pkg github.com/tamnd/zu-go, func (db *DB) Close() error
 pkg github.com/tamnd/zu-go, func (db *DB) Connect(ctx context.Context) (*Conn, error)
@@ -162,6 +167,7 @@ pkg github.com/tamnd/zu-go, func Memory(opts ...Option) (*DB, error)
 pkg github.com/tamnd/zu-go, func Named(name string, value any) Arg
 pkg github.com/tamnd/zu-go, func NewLoader(path string) (*Loader, error)
 pkg github.com/tamnd/zu-go, func Open(path string, opts ...Option) (*DB, error)
+pkg github.com/tamnd/zu-go, func ParseDecimal(s string) (Decimal, error)
 pkg github.com/tamnd/zu-go, func Version() string
 pkg github.com/tamnd/zu-go, func WithConfig(cfg Config) Option
 pkg github.com/tamnd/zu-go, func WithMemoryLimit(bytes uint64) Option
@@ -173,6 +179,7 @@ pkg github.com/tamnd/zu-go, type Config struct
 pkg github.com/tamnd/zu-go, type Conn struct
 pkg github.com/tamnd/zu-go, type DB struct
 pkg github.com/tamnd/zu-go, type Date struct
+pkg github.com/tamnd/zu-go, type Decimal struct
 pkg github.com/tamnd/zu-go, type Error struct
 pkg github.com/tamnd/zu-go, type Graph struct
 pkg github.com/tamnd/zu-go, type Loader struct

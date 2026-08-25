@@ -30,6 +30,7 @@ const (
 	TypeGraph        Type = C.ZU_TYPE_GRAPH
 	TypeBindingTable Type = C.ZU_TYPE_BINDING_TABLE
 	TypeBytes        Type = C.ZU_TYPE_BYTES
+	TypeDecimal      Type = C.ZU_TYPE_DECIMAL
 )
 
 // String is the type in the language's own word for it.
@@ -63,6 +64,8 @@ func (t Type) String() string {
 		return "binding table"
 	case TypeBytes:
 		return "bytes"
+	case TypeDecimal:
+		return "decimal"
 	default:
 		return "type " + strconv.Itoa(int(t))
 	}
@@ -187,6 +190,8 @@ func value(sc *scratch, v *C.zu_value) (any, error) {
 		return str(sc, v)
 	case TypeBytes:
 		return octets(sc, v)
+	case TypeDecimal:
+		return exact(sc, v)
 	case TypeNode:
 		return node(sc, v)
 	case TypeRel:
@@ -243,6 +248,16 @@ func octets(sc *scratch, v *C.zu_value) ([]byte, error) {
 		return []byte{}, nil
 	}
 	return C.GoBytes(unsafe.Pointer(sc.raw), C.int(sc.size)), nil
+}
+
+// exact reads a decimal cell. It goes through its own accessor and not
+// zu_value_f64 because the number the caller asked for is the exact
+// one, and binary floating point is where that is lost.
+func exact(sc *scratch, v *C.zu_value) (Decimal, error) {
+	if err := fail(C.zu_value_decimal(v, &sc.hi, &sc.lo, &sc.scale), nil); err != nil {
+		return Decimal{}, err
+	}
+	return decimal(int64(sc.hi), uint64(sc.lo), int32(sc.scale)), nil
 }
 
 // node reads a node cell.

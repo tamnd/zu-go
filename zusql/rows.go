@@ -32,10 +32,15 @@ func (r *rows) Columns() []string {
 //
 // A value that is a number, a string, a bool or an instant arrives as
 // the type database/sql knows. Everything else arrives as itself: a
-// [zu.Node], a [zu.Rel], a [zu.Path], a [zu.Record], a list as a
-// []any, or one of the temporals that is not an instant. database/sql
-// passes those through to Scan unchanged, so a destination of that type
-// or of any takes them and a *string does not.
+// [zu.Node], a [zu.Rel], a [zu.Path], a [zu.Record], a [zu.Decimal], a
+// list as a []any, or one of the temporals that is not an instant.
+// database/sql passes those through to Scan unchanged, so a destination
+// of that type or of any takes them and a *string does not.
+//
+// A decimal is in that list rather than in the first one on purpose. It
+// is exact, database/sql has no exact number, and handing one over as a
+// float64 here would lose the digits at the one step where nobody asked
+// for it.
 func (r *rows) Next(dest []driver.Value) error {
 	if !r.r.Next() {
 		return io.EOF
@@ -86,6 +91,12 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeFor[string]()
 	case zu.TypeBytes:
 		return reflect.TypeFor[[]byte]()
+	case zu.TypeDecimal:
+		// Not float64. A decimal is exact and this is the answer to
+		// what a caller should scan it into, so naming the type that
+		// loses the digits would be advising the loss rather than
+		// reporting the column.
+		return reflect.TypeFor[zu.Decimal]()
 	case zu.TypeNode:
 		return reflect.TypeFor[zu.Node]()
 	case zu.TypeRel:

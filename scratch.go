@@ -50,4 +50,10 @@ type scratch struct {
 	// cast of the first because the accessor that writes it is typed
 	// for octets and not for characters.
 	raw *C.uint8_t
+	// The three halves of a decimal: the unscaled integer, which is
+	// 128 bits two's complement and so arrives as a signed top and an
+	// unsigned bottom, and the power of ten it is divided by.
+	hi    C.int64_t
+	lo    C.uint64_t
+	scale C.int32_t
 }

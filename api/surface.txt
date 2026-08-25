@@ -45,12 +45,16 @@ pkg github.com/tamnd/zu-go, field Date.Days int32
 pkg github.com/tamnd/zu-go, field Error.Code string
 pkg github.com/tamnd/zu-go, field Error.DocURL string
 pkg github.com/tamnd/zu-go, field Error.Excerpt string
+pkg github.com/tamnd/zu-go, field Error.Graph string
 pkg github.com/tamnd/zu-go, field Error.Message string
 pkg github.com/tamnd/zu-go, field Error.Position Position
 pkg github.com/tamnd/zu-go, field Error.Retryable bool
+pkg github.com/tamnd/zu-go, field Error.Schema string
 pkg github.com/tamnd/zu-go, field Error.Severity Severity
 pkg github.com/tamnd/zu-go, field Error.StandardText string
 pkg github.com/tamnd/zu-go, field Error.Status Status
+pkg github.com/tamnd/zu-go, field Error.Subject string
+pkg github.com/tamnd/zu-go, field Error.SubjectKind string
 pkg github.com/tamnd/zu-go, field LocalDateTime.Nanos int64
 pkg github.com/tamnd/zu-go, field LocalTime.Nanos int64
 pkg github.com/tamnd/zu-go, field Node.Offset uint64

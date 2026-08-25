@@ -428,6 +428,48 @@ func TestEveryRefusalCarriesTheConditionAndThePlace(t *testing.T) {
 	}
 }
 
+// The rest of the diagnostic record ISO 39075 subclause 23.2 asks for:
+// what the condition is about and where the statement was running. A
+// caller that has to find the offending name inside an English sentence
+// is parsing prose, which is the whole reason these are fields.
+func TestARefusalAboutSomethingNamedSaysWhatItIsAbout(t *testing.T) {
+	conn, _ := seeded(t)
+	err := conn.Exec(t.Context(), "MATCH (a:person) RETURN b.uid AS uid")
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("a refused statement is not a *zu.Error: %v", err)
+	}
+	// The kind is its own word rather than glued to the front of the
+	// name, so asking whether this is about a variable is one string
+	// compared against one word.
+	if e.SubjectKind != "variable" {
+		t.Errorf("the condition is about a %q", e.SubjectKind)
+	}
+	if e.Subject != "b" {
+		t.Errorf("the name the condition is about is %q", e.Subject)
+	}
+	if e.Graph == "" || e.Schema == "" {
+		t.Errorf("the statement ran in graph %q schema %q", e.Graph, e.Schema)
+	}
+}
+
+// A condition about no name carries none, rather than carrying a guess
+// or the empty string as though it were one. Both halves of the subject
+// go together, which is what lets a caller test one of them.
+func TestARefusalAboutNothingNamedCarriesNoSubject(t *testing.T) {
+	conn, _ := seeded(t)
+	err := conn.Exec(t.Context(), "RETURN 1 / 0 AS n")
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("a refused statement is not a *zu.Error: %v", err)
+	}
+	if e.SubjectKind != "" || e.Subject != "" {
+		t.Errorf("a division by zero is about %q %q", e.SubjectKind, e.Subject)
+	}
+}
+
 // openFiles counts the descriptors this process holds, on the systems
 // that will say. A count that stands still across a thousand opens is
 // the assertion; the absolute number is nobody's business.

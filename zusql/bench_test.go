@@ -87,7 +87,7 @@ func BenchmarkQueryRowDirect(b *testing.B) {
 
 func BenchmarkPrepared(b *testing.B) {
 	db := benchDB(b)
-	stmt, err := db.Prepare("RETURN $n + 1 AS next")
+	stmt, err := db.Prepare("RETURN $n + 1 AS following")
 	if err != nil {
 		b.Fatal(err)
 	}

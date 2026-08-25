@@ -223,6 +223,26 @@ type Error struct {
 	// under a caret, since a line cut to fit would put the column
 	// somewhere it is not.
 	Excerpt string
+	// SubjectKind is what kind of thing the condition is about, when
+	// it is about something the statement named: one lower case word
+	// out of graph, schema, label, property, variable, type and
+	// function. It is kept apart from Subject rather than glued to the
+	// front of it, so that asking whether a failure is about a label
+	// is one string compared against one word.
+	SubjectKind string
+	// Subject is the name the condition is about, written the way the
+	// statement wrote it and with nothing around it, which is what an
+	// editor underlines. It and SubjectKind are both empty or both
+	// set.
+	Subject string
+	// Graph is the graph the statement was running in, which ISO 39075
+	// subclause 23.2 asks a diagnostic record to name. It is empty
+	// when the failure happened before there was one, which is the
+	// case for a connection that never opened.
+	Graph string
+	// Schema is the schema the statement was running in, empty on the
+	// same terms as Graph.
+	Schema string
 
 	// cause is the context error behind an interruption, so that a
 	// query stopped by a cancelled context answers to
@@ -284,6 +304,10 @@ func take(status C.zu_status, handle *C.zu_error) *Error {
 	e.StandardText = text(C.zu_error_standard_text(handle, &n), n)
 	e.DocURL = text(C.zu_error_doc_url(handle, &n), n)
 	e.Excerpt = text(C.zu_error_excerpt(handle, &n), n)
+	e.SubjectKind = text(C.zu_error_subject_kind(handle, &n), n)
+	e.Subject = text(C.zu_error_subject(handle, &n), n)
+	e.Graph = text(C.zu_error_graph(handle, &n), n)
+	e.Schema = text(C.zu_error_schema(handle, &n), n)
 	e.Severity = Severity(C.zu_error_severity(handle))
 	e.Retryable = C.zu_error_retryable(handle) == 1
 

@@ -133,7 +133,7 @@ func TestAValueThisEngineDoesNotTakeIsRefusedBeforeItRuns(t *testing.T) {
 
 func TestAPreparedStatementRunsAgainWithOnlyWhatChangedRebound(t *testing.T) {
 	conn := memory(t)
-	stmt, err := conn.Prepare(t.Context(), "RETURN $a + $b AS sum")
+	stmt, err := conn.Prepare(t.Context(), "RETURN $a + $b AS total")
 	if err != nil {
 		t.Fatalf("preparing: %v", err)
 	}

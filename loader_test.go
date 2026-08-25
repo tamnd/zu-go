@@ -219,7 +219,7 @@ func TestAColumnOfEveryKindReadsBackAsWhatItWas(t *testing.T) {
 	took := []time.Duration{86_402 * time.Second, 0}
 	aged := []YearMonth{{Months: 14}, {Months: -1}}
 
-	if err := l.Int64s("count", []int64{1, -2}); err != nil {
+	if err := l.Int64s("tally", []int64{1, -2}); err != nil {
 		t.Fatal(err)
 	}
 	if err := l.Float64s("ratio", []float64{1.5, -0.25}); err != nil {
@@ -251,12 +251,12 @@ func TestAColumnOfEveryKindReadsBackAsWhatItWas(t *testing.T) {
 	}
 
 	conn := opened(t, path)
-	rows := query(t, conn, "MATCH (p:person) RETURN p.count AS count, p.ratio AS ratio, "+
+	rows := query(t, conn, "MATCH (p:person) RETURN p.tally AS tally, p.ratio AS ratio, "+
 		"p.flag AS flag, p.name AS name, p.born AS born, p.woke AS woke, "+
 		"p.seen AS seen, p.took AS took, p.aged AS aged")
 
 	type row struct {
-		Count int64
+		Tally int64
 		Ratio float64
 		Flag  bool
 		Name  string

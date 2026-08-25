@@ -101,13 +101,13 @@ func TestACharacterStringScansIntoOctetsBecauseThatIsWhatItIs(t *testing.T) {
 // is whether the slice is nil.
 func TestAByteStringOfNoOctetsIsNotTheSameAsNoByteString(t *testing.T) {
 	conn := memory(t)
-	rows := query(t, conn, `RETURN X'' AS empty, null AS nothing`)
+	rows := query(t, conn, `RETURN X'' AS empty, null AS missing`)
 	if !rows.Next() {
 		t.Fatal("no row")
 	}
 
-	var empty, nothing []byte
-	if err := rows.Scan(&empty, &nothing); err != nil {
+	var empty, missing []byte
+	if err := rows.Scan(&empty, &missing); err != nil {
 		t.Fatalf("scanning the two: %v", err)
 	}
 	if empty == nil {
@@ -116,8 +116,8 @@ func TestAByteStringOfNoOctetsIsNotTheSameAsNoByteString(t *testing.T) {
 	if len(empty) != 0 {
 		t.Errorf("X'' came back as %#v", empty)
 	}
-	if nothing != nil {
-		t.Errorf("a null came back as %#v rather than as nil", nothing)
+	if missing != nil {
+		t.Errorf("a null came back as %#v rather than as nil", missing)
 	}
 
 	// And through the untyped read, where the two are a []byte and an
